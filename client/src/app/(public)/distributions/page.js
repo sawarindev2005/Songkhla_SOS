@@ -1,7 +1,7 @@
-import PlaceBrowser from '@/components/PlaceBrowser';
+import { PlaceList } from '@/components/pk/PlaceList';
 
 export const metadata = { title: 'จุดแจกจ่าย | น้ำท่วมหาดใหญ่' };
 
 export default function DistributionsPage() {
-  return <PlaceBrowser type="distribution" />;
+  return <PlaceList type="distribution" />;
 }

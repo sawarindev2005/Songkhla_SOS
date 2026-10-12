@@ -1,12 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import { Check, CircleCheck, Copy, Crosshair, Minus, Plus, Siren } from 'lucide-react';
 import { MapView } from '@/components/map';
-import { Button, ErrorBanner, Field, cx, inputClass } from '@/components/ui';
 import { api } from '@/lib/api';
 import { URGENCY, VULNERABLE, addMyCase } from '@/lib/format';
+import { Button } from '@/components/pk/Button';
+import { Checkbox } from '@/components/pk/Checkbox';
+import { FallbackBlock } from '@/components/pk/FallbackBlock';
+import { RadioCards } from '@/components/pk/RadioCards';
+import { Stepper } from '@/components/pk/Stepper';
+import { TextField } from '@/components/pk/TextField';
+import { useToast } from '@/components/pk/Toast';
+import { isUrgent, UrgencyIcon } from '@/components/pk/domain';
+import { CheckCircleIcon, CopyIcon, CrosshairIcon, SirenIcon, WarningIcon } from '@/components/pk/icons';
+import { cn } from '@/components/pk/cn';
 
 const EMPTY = {
   requester_name: '',
@@ -30,6 +37,20 @@ function validate(form, position) {
   return errors;
 }
 
+// ข้อความ SMS สำรองเมื่อส่งผ่านเน็ตไม่ได้ ใส่ข้อมูลที่กรอกและพิกัดให้แล้ว
+function smsBody(form, position) {
+  const parts = [
+    'SOS ขอความช่วยเหลือน้ำท่วมหาดใหญ่',
+    form.requester_name && `ชื่อ ${form.requester_name}`,
+    form.phone && `โทร ${form.phone}`,
+    `${form.people_count} คน`,
+    URGENCY[form.urgency]?.label,
+    position && `พิกัด https://maps.google.com/?q=${position.lat.toFixed(5)},${position.lng.toFixed(5)}`,
+    form.address_note,
+  ];
+  return parts.filter(Boolean).join(' ');
+}
+
 export default function RequestPage() {
   const [form, setForm] = useState(EMPTY);
   const [position, setPosition] = useState(null);
@@ -41,7 +62,7 @@ export default function RequestPage() {
   const [result, setResult] = useState(null);
 
   const set = (key) => (e) => {
-    const value = e?.target ? (e.target.type === 'checkbox' ? e.target.checked : e.target.value) : e;
+    const value = e?.target ? e.target.value : e;
     setForm((f) => ({ ...f, [key]: value }));
     if (errors[key]) setErrors((er) => ({ ...er, [key]: undefined }));
   };
@@ -80,7 +101,9 @@ export default function RequestPage() {
     const errs = validate(form, position);
     setErrors(errs);
     if (Object.keys(errs).length) {
-      document.querySelector('[aria-invalid="true"], [data-error="true"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document
+        .querySelector('[aria-invalid="true"], [data-error="true"]')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
     setSubmitting(true);
@@ -92,7 +115,6 @@ export default function RequestPage() {
       });
       addMyCase(res.case_no);
       setResult(res);
-      window.scrollTo({ top: 0 });
     } catch (err) {
       setSubmitError(err);
     } finally {
@@ -103,207 +125,213 @@ export default function RequestPage() {
   if (result) return <Success caseNo={result.case_no} />;
 
   return (
-    <form onSubmit={submit} noValidate className="mx-auto flex max-w-xl flex-col gap-5 px-4 py-5">
-      <header className="flex items-center gap-3">
-        <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-brand text-white">
-          <Siren className="size-6" aria-hidden />
-        </span>
-        <div>
-          <h1 className="text-xl font-bold">ขอความช่วยเหลือ</h1>
-          <p className="text-sm text-muted">กรอกข้อมูลให้มากที่สุด ทีมกู้ภัยจะใช้ประเมินความเร่งด่วน</p>
-        </div>
+    <form onSubmit={submit} noValidate className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 pt-5 pb-8">
+      <header className="flex flex-col gap-1">
+        <h1 className="flex items-center gap-2 text-7xl font-bold">
+          <SirenIcon size={28} weight="fill" className="text-red" aria-hidden />
+          ขอความช่วยเหลือ
+        </h1>
+        <p className="font-body text-md text-t2">กรอกให้ครบเท่าที่ทำได้ ทีมกู้ภัยใช้ข้อมูลนี้จัดลำดับความด่วน</p>
       </header>
 
       {/* ตำแหน่ง */}
       <section className="flex flex-col gap-2" data-error={errors.position ? 'true' : undefined}>
         <div className="flex items-end justify-between gap-2">
-          <h2 className="text-sm font-semibold">
-            ตำแหน่งที่ต้องการความช่วยเหลือ <span className="text-brand">*</span>
+          <h2 className="min-w-0 flex-1 text-base font-medium">
+            ตำแหน่งที่ต้องการความช่วยเหลือ <span className="text-red">*</span>
           </h2>
-          <Button type="button" variant="safety" size="sm" onClick={useCurrentLocation} loading={locating}>
-            {!locating && <Crosshair className="size-4" aria-hidden />}
+          <Button
+            variant="outline"
+            size="sm"
+            block={false}
+            className="shrink-0 whitespace-nowrap"
+            loading={locating}
+            onClick={useCurrentLocation}
+            icon={<CrosshairIcon size={18} aria-hidden />}
+          >
             ใช้ตำแหน่งปัจจุบัน
           </Button>
         </div>
         <div
-          className={cx(
-            'h-64 overflow-hidden rounded-2xl border-2',
-            errors.position ? 'border-brand' : 'border-line'
+          className={cn(
+            'isolate h-56 shrink-0 overflow-hidden rounded-lg border short:h-44',
+            errors.position ? 'border-red' : 'border-line2'
           )}
         >
-          <MapView picker={{ value: position, onChange: pick }} focus={focus} onLocate={pick} />
+          <MapView pinStyle="public" picker={{ value: position, onChange: pick }} focus={focus} locate={false} />
         </div>
-        <p className={cx('text-sm', errors.position ? 'text-brand-dark' : 'text-muted')} role={errors.position ? 'alert' : undefined}>
+        <p
+          className={cn('font-body text-sm', errors.position ? 'text-red-tx' : 'text-t3')}
+          role={errors.position ? 'alert' : undefined}
+        >
           {errors.position ||
             (position
-              ? `ปักหมุดแล้ว (${position.lat.toFixed(5)}, ${position.lng.toFixed(5)}) — ลากหมุดเพื่อปรับได้`
+              ? `ปักหมุดแล้ว (${position.lat.toFixed(5)}, ${position.lng.toFixed(5)}) ลากหมุดเพื่อปรับได้`
               : 'แตะบนแผนที่เพื่อปักหมุดบ้านหรือจุดที่ติดอยู่')}
         </p>
       </section>
 
-      <Field label="ชื่อผู้ติดต่อ" required error={errors.requester_name}>
-        {(p) => (
-          <input {...p} className={inputClass} value={form.requester_name} onChange={set('requester_name')} autoComplete="name" />
-        )}
-      </Field>
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-2 text-base font-medium">ความเร่งด่วน</legend>
+        <RadioCards
+          label="ความเร่งด่วน"
+          value={form.urgency}
+          onChange={set('urgency')}
+          options={Object.entries(URGENCY).map(([key, u]) => ({
+            value: key,
+            title: u.label,
+            description: u.hint,
+            hideDescriptionOnShort: true,
+            icon: (
+              <UrgencyIcon
+                urgency={key}
+                size={22}
+                className={cn('shrink-0', isUrgent(key) ? 'text-red' : key === 'low' ? 'text-t3' : 'text-amb')}
+              />
+            ),
+          }))}
+        />
+      </fieldset>
 
-      <Field label="เบอร์โทรศัพท์" required error={errors.phone} hint="ทีมกู้ภัยจะโทรกลับเบอร์นี้ (ไม่แสดงต่อสาธารณะ)">
-        {(p) => (
-          <input
-            {...p}
-            type="tel"
-            inputMode="tel"
-            autoComplete="tel"
-            className={cx(inputClass, 'tabular')}
-            value={form.phone}
-            onChange={set('phone')}
-            placeholder="08x-xxx-xxxx"
-          />
-        )}
-      </Field>
+      <TextField
+        label="ชื่อผู้ติดต่อ *"
+        error={errors.requester_name}
+        value={form.requester_name}
+        onChange={set('requester_name')}
+        autoComplete="name"
+      />
 
-      <Field label="จำนวนคนที่ต้องการความช่วยเหลือ">
-        {(p) => (
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              aria-label="ลดจำนวน"
-              onClick={() => set('people_count')(Math.max(1, Number(form.people_count) - 1))}
-              className="grid size-11 cursor-pointer place-items-center rounded-xl border border-line hover:bg-slate-50"
-            >
-              <Minus className="size-5" aria-hidden />
-            </button>
-            <input
-              {...p}
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={999}
-              className={cx(inputClass, 'tabular w-24 text-center text-lg font-bold')}
-              value={form.people_count}
-              onChange={set('people_count')}
-            />
-            <button
-              type="button"
-              aria-label="เพิ่มจำนวน"
-              onClick={() => set('people_count')(Math.min(999, Number(form.people_count) + 1))}
-              className="grid size-11 cursor-pointer place-items-center rounded-xl border border-line hover:bg-slate-50"
-            >
-              <Plus className="size-5" aria-hidden />
-            </button>
-            <span className="text-muted">คน</span>
-          </div>
-        )}
-      </Field>
+      <TextField
+        label="เบอร์โทรศัพท์ *"
+        error={errors.phone}
+        hint="ทีมกู้ภัยจะโทรกลับเบอร์นี้ (ไม่แสดงต่อสาธารณะ)"
+        type="tel"
+        inputMode="tel"
+        autoComplete="tel"
+        placeholder="08x-xxx-xxxx"
+        className="[&_input]:tabular-nums"
+        value={form.phone}
+        onChange={set('phone')}
+      />
+
+      <div className="flex flex-col gap-2">
+        <span className="text-base font-medium">จำนวนคนที่ต้องการความช่วยเหลือ</span>
+        <Stepper
+          label="จำนวนคน"
+          unit="คน"
+          min={1}
+          max={999}
+          value={Number(form.people_count)}
+          onChange={set('people_count')}
+        />
+      </div>
 
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-2 text-sm font-semibold">มีกลุ่มเปราะบางหรือไม่ (เลือกได้หลายข้อ)</legend>
-        <div className="grid grid-cols-2 gap-2">
+        <legend className="mb-2 text-base font-medium">มีกลุ่มเปราะบางไหม (เลือกได้หลายข้อ)</legend>
+        <div className="grid grid-cols-2 gap-x-3">
           {VULNERABLE.map((v) => (
-            <label
+            <Checkbox
               key={v.key}
-              className={cx(
-                'flex min-h-12 cursor-pointer items-center gap-2 rounded-xl border px-3 text-sm font-medium transition-colors',
-                form[v.key] ? 'border-brand bg-brand-soft text-brand-dark' : 'border-line hover:bg-slate-50'
-              )}
+              checked={form[v.key]}
+              onChange={set(v.key)}
+              className="min-h-11 text-md font-medium"
             >
-              <input type="checkbox" className="size-5 accent-brand" checked={form[v.key]} onChange={set(v.key)} />
               {v.label}
-            </label>
+            </Checkbox>
           ))}
         </div>
       </fieldset>
 
-      <fieldset className="flex flex-col gap-2">
-        <legend className="mb-2 text-sm font-semibold">ความเร่งด่วน</legend>
-        {Object.entries(URGENCY).map(([key, u]) => (
-          <label
-            key={key}
-            className={cx(
-              'flex min-h-12 cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors',
-              form.urgency === key ? 'border-safety bg-safety-soft' : 'border-line hover:bg-slate-50'
-            )}
-          >
-            <input
-              type="radio"
-              name="urgency"
-              value={key}
-              checked={form.urgency === key}
-              onChange={set('urgency')}
-              className="mt-1 size-5 accent-safety"
-            />
-            <span>
-              <span className="block font-semibold">{u.label}</span>
-              <span className="block text-sm text-muted">{u.hint}</span>
-            </span>
-          </label>
-        ))}
-      </fieldset>
+      <TextField
+        multiline
+        rows={3}
+        label="รายละเอียดสถานการณ์"
+        hint="เช่น ระดับน้ำ ติดอยู่ชั้นไหน ต้องการเรือ ยา หรืออาหาร"
+        value={form.description}
+        onChange={set('description')}
+      />
 
-      <Field label="รายละเอียดสถานการณ์" hint="เช่น ระดับน้ำ, ติดอยู่ชั้นไหน, ต้องการเรือ/ยา/อาหาร">
-        {(p) => (
-          <textarea {...p} rows={3} className={inputClass} value={form.description} onChange={set('description')} />
-        )}
-      </Field>
+      <TextField
+        label="จุดสังเกต / ที่อยู่"
+        hint="เช่น ซอย ชื่อหมู่บ้าน บ้านสีอะไร"
+        value={form.address_note}
+        onChange={set('address_note')}
+      />
 
-      <Field label="จุดสังเกต / ที่อยู่" hint="เช่น ซอย, ชื่อหมู่บ้าน, บ้านสีอะไร">
-        {(p) => <input {...p} className={inputClass} value={form.address_note} onChange={set('address_note')} />}
-      </Field>
+      {submitError && (
+        <div className="flex flex-col gap-4">
+          <p role="alert" className="flex items-start gap-2 text-md font-medium text-red-tx">
+            <WarningIcon size={18} weight="bold" className="mt-0.5 shrink-0" aria-hidden />
+            {submitError.message}
+          </p>
+          <FallbackBlock smsBody={smsBody(form, position)} note="ข้อความ SMS ใส่ชื่อ เบอร์ และพิกัดให้แล้ว" />
+        </div>
+      )}
 
-      <ErrorBanner error={submitError} />
-
-      <Button type="submit" size="lg" loading={submitting} className="w-full">
-        {!submitting && <Siren className="size-5" aria-hidden />}
+      <Button
+        type="submit"
+        variant="danger"
+        loading={submitting}
+        icon={<SirenIcon size={20} weight="fill" aria-hidden />}
+      >
         {submitting ? 'กำลังส่งคำขอ…' : 'ส่งคำขอความช่วยเหลือ'}
       </Button>
-      <p className="text-center text-sm text-muted">
-        หากอันตรายถึงชีวิต โทร <a href="tel:1669" className="font-bold text-brand-dark underline">1669</a> หรือ{' '}
-        <a href="tel:1784" className="font-bold text-brand-dark underline">1784</a> ทันที
+      <p className="text-center font-body text-sm text-t2">
+        หากอันตรายถึงชีวิต โทร{' '}
+        <a href="tel:1669" className="font-bold text-red underline">
+          1669
+        </a>{' '}
+        หรือ{' '}
+        <a href="tel:1784" className="font-bold text-red underline">
+          1784
+        </a>{' '}
+        ทันที
       </p>
     </form>
   );
 }
 
 function Success({ caseNo }) {
-  const [copied, setCopied] = useState(false);
+  const toast = useToast();
 
   async function copy() {
     try {
       await navigator.clipboard.writeText(caseNo);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      toast('คัดลอกเลขเคสแล้ว');
     } catch {
-      // clipboard ใช้ไม่ได้ — ผู้ใช้ยังจดเลขเคสจากหน้าจอได้
+      toast('คัดลอกไม่ได้ กรุณาจดเลขเคสจากหน้าจอ');
     }
   }
 
   return (
-    <div className="mx-auto flex max-w-md flex-col items-center gap-5 px-4 py-10 text-center">
-      <CircleCheck className="size-16 text-shelter" aria-hidden />
-      <div>
-        <h1 className="text-2xl font-bold">ส่งคำขอเรียบร้อยแล้ว</h1>
-        <p className="mt-1 text-muted">ทีมกู้ภัยเห็นตำแหน่งของคุณบนแผนที่แล้ว กรุณาเปิดโทรศัพท์ไว้</p>
+    <div className="flex min-h-0 flex-1 flex-col items-center gap-5 overflow-y-auto px-4 py-8 text-center">
+      <CheckCircleIcon size={56} weight="fill" className="text-ok" aria-hidden />
+      <div className="flex flex-col gap-1">
+        <h1 className="text-7xl font-bold">ส่งคำขอแล้ว</h1>
+        <p className="font-body text-md text-t2">ทีมกู้ภัยเห็นตำแหน่งของคุณบนแผนที่แล้ว เปิดโทรศัพท์ไว้</p>
       </div>
-      <div className="w-full rounded-2xl border-2 border-dashed border-safety bg-safety-soft p-5">
-        <p className="text-sm font-semibold text-safety-dark">เลขเคสของคุณ</p>
-        <p className="tabular my-1 text-4xl font-bold tracking-wider" aria-live="polite">
+      <div className="flex w-full flex-col items-center gap-1 border-y border-line py-4">
+        <p className="text-sm font-medium text-t2">เลขเคสของคุณ</p>
+        <p className="text-7xl font-bold tracking-wider tabular-nums" aria-live="polite">
           {caseNo}
         </p>
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="sm"
+          block={false}
           onClick={copy}
-          className="mx-auto flex min-h-10 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-safety-dark hover:bg-blue-100"
+          icon={<CopyIcon size={18} aria-hidden />}
+          className="mt-1"
         >
-          {copied ? <Check className="size-4" aria-hidden /> : <Copy className="size-4" aria-hidden />}
-          {copied ? 'คัดลอกแล้ว' : 'คัดลอกเลขเคส'}
-        </button>
+          คัดลอกเลขเคส
+        </Button>
       </div>
-      <p className="text-sm text-muted">จดเลขเคสไว้ ใช้ติดตามสถานะได้จากเครื่องไหนก็ได้</p>
+      <p className="font-body text-sm text-t2">จดเลขเคสไว้ ใช้ติดตามสถานะได้จากเครื่องไหนก็ได้</p>
       <div className="flex w-full flex-col gap-2">
-        <Button as={Link} href={`/track?case=${caseNo}`} variant="safety" size="lg">
+        <Button href={`/track?case=${caseNo}`} variant="primary">
           ติดตามสถานะเคส
         </Button>
-        <Button as={Link} href="/" variant="outline" size="lg">
+        <Button href="/" variant="outline">
           กลับหน้าแผนที่
         </Button>
       </div>

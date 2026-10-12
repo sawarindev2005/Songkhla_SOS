@@ -7,6 +7,8 @@ import { MapContainer, Marker, TileLayer, Tooltip, ZoomControl, useMap, useMapEv
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import { House, LifeBuoy, LocateFixed, LoaderCircle, MapPin, Package, Siren } from 'lucide-react';
 import { HATYAI_CENTER } from '@/lib/format';
+import { AreaBubble, CasePin, MePin, PickPin, PlacePin, TeamPin } from '@/components/pk/pins';
+import { CircleNotchIcon, CrosshairIcon } from '@/components/pk/icons';
 
 const URGENCY_COLOR = {
   critical: '#dc2626',
@@ -58,6 +60,47 @@ function clusterIcon(cluster) {
   });
 }
 
+const CLASSIC_PINS = {
+  request: requestIcon,
+  place: (kind, active, selected) =>
+    pinIcon(active ? TYPE_STYLE[kind].color : '#64748b', TYPE_STYLE[kind].Icon, { selected }),
+  rescuer: (selected) => pinIcon(TYPE_STYLE.rescuer.color, LifeBuoy, { size: 32, selected }),
+  me: () => meIcon,
+  pick: (picker) => pinIcon(picker.color || TYPE_STYLE.pick.color, picker.icon || MapPin, { size: 40 }),
+  cluster: clusterIcon,
+};
+
+// หมุดแบบหน้าคนทั่วไป: เรนเดอร์ชิ้นจาก components/pk/pins เป็น html ของ divIcon
+function nodeIcon(key, node, size) {
+  if (!iconCache.has(key)) {
+    iconCache.set(
+      key,
+      L.divIcon({
+        className: 'pk-pin',
+        html: renderToStaticMarkup(node),
+        iconSize: [size, size],
+        iconAnchor: [size / 2, size / 2],
+      })
+    );
+  }
+  return iconCache.get(key);
+}
+
+const PUBLIC_PINS = {
+  request: (r, selected) =>
+    nodeIcon(`pk-q-${r.urgency}-${r.status}-${selected}`, <CasePin urgency={r.urgency} status={r.status} big={selected} />, selected ? 36 : 30),
+  place: (kind, active, selected) =>
+    nodeIcon(`pk-${kind}-${active}-${selected}`, <PlacePin kind={kind} active={active} big={selected} />, selected ? 36 : 30),
+  rescuer: () => nodeIcon('pk-team', <TeamPin />, 30),
+  me: () => nodeIcon('pk-me', <MePin />, 18),
+  pick: () => nodeIcon('pk-pick', <PickPin />, 40),
+  cluster: (cluster) => {
+    const count = cluster.getChildCount();
+    const urgent = cluster.getAllChildMarkers().some((m) => m.options.urgent);
+    return nodeIcon(`pk-c-${count}-${urgent}`, <AreaBubble count={count} urgent={urgent} />, 36);
+  },
+};
+
 function FlyTo({ focus }) {
   const map = useMap();
   const lat = focus?.lat;
@@ -89,7 +132,7 @@ function ClickPicker({ onPick }) {
   return null;
 }
 
-function LocateControl({ onLocate, className }) {
+function LocateControl({ onLocate, className, publicStyle = false }) {
   const map = useMap();
   const ref = useRef(null);
   const [busy, setBusy] = useState(false);
@@ -131,18 +174,33 @@ function LocateControl({ onLocate, className }) {
           {error}
         </p>
       )}
-      <button
-        type="button"
-        onClick={locate}
-        aria-label="ไปยังตำแหน่งของฉัน"
-        className="grid size-12 cursor-pointer place-items-center rounded-full bg-surface text-ink shadow-[var(--shadow-float)] hover:bg-slate-50"
-      >
-        {busy ? (
-          <LoaderCircle className="size-5 animate-spin" aria-hidden />
-        ) : (
-          <LocateFixed className="size-5" aria-hidden />
-        )}
-      </button>
+      {publicStyle ? (
+        <button
+          type="button"
+          onClick={locate}
+          aria-label="ไปยังตำแหน่งของฉัน"
+          className="grid size-11 place-items-center rounded-full bg-white text-ink shadow-float focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acc"
+        >
+          {busy ? (
+            <CircleNotchIcon size={22} className="animate-spin" aria-hidden />
+          ) : (
+            <CrosshairIcon size={22} aria-hidden />
+          )}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={locate}
+          aria-label="ไปยังตำแหน่งของฉัน"
+          className="grid size-12 cursor-pointer place-items-center rounded-full bg-surface text-ink shadow-[var(--shadow-float)] hover:bg-slate-50"
+        >
+          {busy ? (
+            <LoaderCircle className="size-5 animate-spin" aria-hidden />
+          ) : (
+            <LocateFixed className="size-5" aria-hidden />
+          )}
+        </button>
+      )}
     </div>
   );
 }
@@ -165,7 +223,9 @@ export default function MapViewInner({
   center = HATYAI_CENTER,
   zoom = 14,
   className = 'h-full w-full',
+  pinStyle = 'classic', // 'public' = หมุดแบบหน้าคนทั่วไป (components/pk/pins)
 }) {
+  const pins = pinStyle === 'public' ? PUBLIC_PINS : CLASSIC_PINS;
   const visible = { requests: true, shelters: true, distributions: true, rescuers: true, ...show };
   const isSel = (type, id) => selected?.type === type && selected?.id === id;
   const select = (type, item) => ({ click: () => onSelect?.(type, item) });
@@ -186,9 +246,7 @@ export default function MapViewInner({
           <Marker
             key={`s-${s.id}`}
             position={[s.lat, s.lng]}
-            icon={pinIcon(s.status === 'open' ? TYPE_STYLE.shelter.color : '#64748b', House, {
-              selected: isSel('shelter', s.id),
-            })}
+            icon={pins.place('shelter', s.status === 'open', isSel('shelter', s.id))}
             eventHandlers={select('shelter', s)}
             title={`ที่พักพิง: ${s.name}`}
           >
@@ -201,9 +259,7 @@ export default function MapViewInner({
           <Marker
             key={`d-${d.id}`}
             position={[d.lat, d.lng]}
-            icon={pinIcon(d.status === 'active' ? TYPE_STYLE.distribution.color : '#64748b', Package, {
-              selected: isSel('distribution', d.id),
-            })}
+            icon={pins.place('distribution', d.status === 'active', isSel('distribution', d.id))}
             eventHandlers={select('distribution', d)}
             title={`จุดแจกจ่าย: ${d.name}`}
           >
@@ -218,7 +274,7 @@ export default function MapViewInner({
             <Marker
               key={`r-${r.id}`}
               position={[r.current_lat, r.current_lng]}
-              icon={pinIcon(TYPE_STYLE.rescuer.color, LifeBuoy, { size: 32, selected: isSel('rescuer', r.id) })}
+              icon={pins.rescuer(isSel('rescuer', r.id))}
               eventHandlers={select('rescuer', r)}
               title={`หน่วยกู้ภัย: ${r.team_name || r.full_name || ''}`}
             >
@@ -231,13 +287,14 @@ export default function MapViewInner({
           chunkedLoading
           maxClusterRadius={50}
           showCoverageOnHover={false}
-          iconCreateFunction={clusterIcon}
+          iconCreateFunction={pins.cluster}
         >
           {requests.map((r) => (
             <Marker
               key={`q-${r.id}`}
               position={[r.lat, r.lng]}
-              icon={requestIcon(r, isSel('request', r.id))}
+              icon={pins.request(r, isSel('request', r.id))}
+              urgent={r.urgency === 'critical' && r.status === 'pending'}
               eventHandlers={select('request', r)}
               title={`เคส ${r.case_no}`}
             />
@@ -248,7 +305,7 @@ export default function MapViewInner({
       {me?.lat != null && (
         <Marker
           position={[me.lat, me.lng]}
-          icon={me.draggable ? pinIcon(TYPE_STYLE.rescuer.color, LifeBuoy, { size: 40, selected: true }) : meIcon}
+          icon={me.draggable ? pinIcon(TYPE_STYLE.rescuer.color, LifeBuoy, { size: 40, selected: true }) : pins.me()}
           draggable={Boolean(me.draggable)}
           eventHandlers={me.draggable ? { dragend: (e) => me.onDrag?.(e.target.getLatLng()) } : undefined}
           zIndexOffset={1000}
@@ -268,7 +325,7 @@ export default function MapViewInner({
           {picker.value && (
             <Marker
               position={[picker.value.lat, picker.value.lng]}
-              icon={pinIcon(picker.color || TYPE_STYLE.pick.color, picker.icon || MapPin, { size: 40 })}
+              icon={pins.pick(picker)}
               draggable
               eventHandlers={{ dragend: (e) => picker.onChange(e.target.getLatLng()) }}
               zIndexOffset={1000}
@@ -278,7 +335,7 @@ export default function MapViewInner({
         </>
       )}
 
-      {locate && <LocateControl onLocate={onLocate} className={locateClassName} />}
+      {locate && <LocateControl onLocate={onLocate} className={locateClassName} publicStyle={pinStyle === 'public'} />}
     </MapContainer>
   );
 }

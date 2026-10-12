@@ -2,36 +2,25 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import {
-  ChevronLeft,
-  ChevronRight,
-  FileSearch,
-  House,
-  LifeBuoy,
-  List,
-  LogIn,
-  Package,
-  Phone,
-  Siren,
-  TriangleAlert,
-} from 'lucide-react';
 import { MapView } from '@/components/map';
-import MapChips from '@/components/MapChips';
-import { DistributionDetail, RequestDetail, ShelterDetail } from '@/components/Details';
-import { Button, ErrorBanner, cx } from '@/components/ui';
 import { usePolling } from '@/hooks/usePolling';
-import { ROLE_HOME, useAuth } from '@/lib/auth';
+import { STATUS, distanceKm, formatDistance, formatNumber, formatTime, getMyCases } from '@/lib/format';
+import { AlertBanner } from '@/components/pk/AlertBanner';
+import { Button } from '@/components/pk/Button';
+import { CaseCard, PlaceRow } from '@/components/pk/CaseCard';
+import { Chip, ChipRow } from '@/components/pk/Chip';
+import { EmptyState } from '@/components/pk/EmptyState';
+import { HotlineRow } from '@/components/pk/FallbackBlock';
+import { IconButton } from '@/components/pk/IconButton';
+import { MapSheet } from '@/components/pk/MapSheet';
+import { DistributionPublicDetail, RequestPublicDetail, ShelterPublicDetail } from '@/components/pk/PublicDetail';
+import { Segmented } from '@/components/pk/Segmented';
+import { StatRow } from '@/components/pk/StatRow';
+import { useToast } from '@/components/pk/Toast';
 import {
-  HOTLINES,
-  STATUS,
-  URGENCY,
-  distanceKm,
-  formatDistance,
-  formatNumber,
-  formatTime,
-  getMyCases,
-  timeAgo,
-} from '@/lib/format';
+  CaretLeftIcon, CaretRightIcon, CircleNotchIcon, CrosshairIcon, FileMagnifyingGlassIcon, HouseLineIcon,
+  LifebuoyIcon, ListBulletsIcon, PackageIcon, SirenIcon, WarningIcon,
+} from '@/components/pk/icons';
 
 const TYPE_LIST = {
   request: 'requests',
@@ -40,7 +29,17 @@ const TYPE_LIST = {
   rescuer: 'rescuers',
 };
 
+const LAYERS = [
+  { key: 'requests', label: 'ขอช่วย', icon: <SirenIcon size={16} weight="fill" className="text-red" aria-hidden /> },
+  { key: 'distributions', label: 'แจกจ่าย', icon: <PackageIcon size={16} weight="fill" className="text-acc" aria-hidden /> },
+  { key: 'rescuers', label: 'กู้ภัย', icon: <LifebuoyIcon size={16} weight="fill" className="text-ink" aria-hidden /> },
+  { key: 'shelters', label: 'ที่พัก', icon: <HouseLineIcon size={16} weight="fill" className="text-acc" aria-hidden /> },
+];
+
+const fmt = (v) => (v == null ? '–' : formatNumber(v));
+
 export default function HomePage() {
+  const toast = useToast();
   const requests = usePolling('/requests/public');
   const shelters = usePolling('/shelters');
   const distributions = usePolling('/distributions');
@@ -51,6 +50,7 @@ export default function HomePage() {
   const [selected, setSelected] = useState(null);
   const [focus, setFocus] = useState(null);
   const [me, setMe] = useState(null);
+  const [locating, setLocating] = useState(false);
   const [view, setView] = useState('summary'); // summary | list
   const [collapsed, setCollapsed] = useState(false);
   const [myCaseNo, setMyCaseNo] = useState(null);
@@ -76,18 +76,16 @@ export default function HomePage() {
   };
 
   // ดึงรายการล่าสุดของจุดที่เลือก เพื่อให้รายละเอียดอัปเดตตาม polling
-  const selectedItem = selected
-    ? data[TYPE_LIST[selected.type]].find((x) => x.id === selected.id)
-    : null;
+  const selectedItem = selected ? data[TYPE_LIST[selected.type]].find((x) => x.id === selected.id) : null;
 
   const listItems = (() => {
     const items = [];
-    const push = (type, list, getPos) =>
+    const push = (type, list) =>
       show[TYPE_LIST[type]] !== false &&
-      list.forEach((item) => items.push({ type, item, distance: distanceKm(me, getPos(item)) }));
-    push('request', data.requests, (r) => r);
-    push('shelter', data.shelters, (s) => s);
-    push('distribution', data.distributions, (d) => d);
+      list.forEach((item) => items.push({ type, item, distance: distanceKm(me, item) }));
+    push('request', data.requests);
+    push('shelter', data.shelters);
+    push('distribution', data.distributions);
     if (me) items.sort((a, b) => a.distance - b.distance);
     return items;
   })();
@@ -103,16 +101,58 @@ export default function HomePage() {
     setFocus({ lat: item.lat, lng: item.lng });
   }
 
+  function locateMe() {
+    if (!navigator.geolocation) {
+      toast('อุปกรณ์นี้ไม่รองรับการระบุตำแหน่ง');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocating(false);
+        const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setMe(p);
+        setFocus({ ...p, zoom: 16 });
+      },
+      () => {
+        setLocating(false);
+        toast('ระบุตำแหน่งไม่ได้ กรุณาเปิด GPS และอนุญาตการเข้าถึงตำแหน่ง', 4000);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
   const s = stats.data;
   const criticalCount = data.requests.filter((r) => r.urgency === 'critical' && r.status === 'pending').length;
   const loadError = requests.error || stats.error;
 
+  const toolbar = (
+    <>
+      <Button
+        variant="float"
+        size="sm"
+        block={false}
+        icon={<ListBulletsIcon size={18} aria-hidden />}
+        onClick={() => {
+          setView('list');
+          setSelected(null);
+          setCollapsed(false);
+        }}
+      >
+        ดูแบบรายการ
+      </Button>
+      <IconButton label="ไปยังตำแหน่งของฉัน" tone="float" onClick={locateMe} disabled={locating}>
+        {locating ? <CircleNotchIcon size={22} className="animate-spin" aria-hidden /> : <CrosshairIcon size={22} aria-hidden />}
+      </IconButton>
+    </>
+  );
+
   return (
-    <div className="screen-h relative flex flex-col md:block">
-      {/* ---------- แผนที่ ---------- */}
-      <div className="relative min-h-0 flex-1 md:absolute md:inset-0">
-        <h1 className="sr-only">แผนที่สถานการณ์น้ำท่วม อำเภอหาดใหญ่</h1>
+    <>
+      <h1 className="sr-only">แผนที่สถานการณ์น้ำท่วม อำเภอหาดใหญ่</h1>
+      <div className="absolute inset-0 isolate">
         <MapView
+          pinStyle="public"
           requests={data.requests}
           shelters={data.shelters}
           distributions={data.distributions}
@@ -122,276 +162,173 @@ export default function HomePage() {
           onSelect={handleSelect}
           focus={focus}
           me={me}
-          onLocate={setMe}
-          locateClassName="bottom-8 md:bottom-4"
+          locate={false}
         />
-        <div className="absolute inset-x-0 top-3 z-[600] flex items-center md:left-[25.5rem]">
-          <MapChips
-            counts={counts}
-            show={show}
-            onToggle={(key) => setShow((prev) => ({ ...prev, [key]: prev[key] === false }))}
-            className="min-w-0 flex-1"
-          />
-          <StaffButton />
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            setView('list');
-            setSelected(null);
-            setCollapsed(false);
-          }}
-          className="absolute bottom-8 left-3 z-[600] flex min-h-11 cursor-pointer items-center gap-2 rounded-full bg-surface px-4 text-sm font-semibold shadow-[var(--shadow-float)] hover:bg-slate-50 md:hidden"
-        >
-          <List className="size-4" aria-hidden />
-          ดูแบบรายการ
-        </button>
       </div>
 
-      {/* ---------- Bottom sheet (mobile) / แผงด้านซ้าย (desktop) ---------- */}
-      <section
-        aria-label="ข้อมูลสถานการณ์"
-        className={cx(
-          'relative z-[700] -mt-4 flex shrink-0 flex-col overflow-hidden rounded-t-3xl bg-surface shadow-[var(--shadow-sheet)]',
-          'md:absolute md:bottom-4 md:left-4 md:top-4 md:mt-0 md:w-96 md:rounded-3xl md:shadow-xl',
-          collapsed ? 'max-h-14' : 'max-h-[52dvh] md:max-h-none'
-        )}
+      <ChipRow label="ชั้นข้อมูลบนแผนที่" className="absolute inset-x-0 top-0 z-[500] px-3 py-3">
+        {LAYERS.map((l) => (
+          <Chip
+            key={l.key}
+            variant="map"
+            layer
+            muted={show[l.key] === false}
+            icon={l.icon}
+            count={counts[l.key]}
+            onClick={() => setShow((prev) => ({ ...prev, [l.key]: prev[l.key] === false }))}
+          >
+            {l.label}
+          </Chip>
+        ))}
+      </ChipRow>
+
+      <MapSheet
+        label="ข้อมูลสถานการณ์"
+        collapsed={collapsed}
+        onToggle={() => setCollapsed((c) => !c)}
+        toolbar={toolbar}
+        summary={
+          <p className="flex items-baseline justify-between gap-3 pb-1">
+            <span className="text-lg font-bold">สถานการณ์ตอนนี้ อ.หาดใหญ่</span>
+            <span className="text-md font-semibold text-red tabular-nums">รอช่วย {fmt(s?.pending)}</span>
+          </p>
+        }
       >
-        <button
-          type="button"
-          onClick={() => setCollapsed((c) => !c)}
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? 'ขยายแผงข้อมูล' : 'ย่อแผงข้อมูล'}
-          className="flex h-6 w-full shrink-0 cursor-pointer items-center justify-center md:hidden"
-        >
-          <span className="h-1.5 w-10 rounded-full bg-slate-300" aria-hidden />
-        </button>
+        {selectedItem ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setSelected(null)}
+              className="-ml-1 flex min-h-11 w-fit items-center gap-1 px-1 text-md font-semibold text-acc"
+            >
+              <CaretLeftIcon size={18} weight="bold" aria-hidden />
+              กลับ
+            </button>
+            {selected.type === 'request' && (
+              <RequestPublicDetail request={selectedItem} distance={distanceKm(me, selectedItem)} />
+            )}
+            {selected.type === 'shelter' && (
+              <ShelterPublicDetail place={selectedItem} distance={distanceKm(me, selectedItem)} />
+            )}
+            {selected.type === 'distribution' && (
+              <DistributionPublicDetail place={selectedItem} distance={distanceKm(me, selectedItem)} />
+            )}
+          </>
+        ) : (
+          <>
+            {myCaseNo && <MyCaseRow caseNo={myCaseNo} data={myCase.data} />}
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 md:pt-4">
-          {selectedItem ? (
-            <div className="flex flex-col gap-3">
-              <button
-                type="button"
-                onClick={() => setSelected(null)}
-                className="-ml-2 flex min-h-10 w-fit cursor-pointer items-center gap-1 rounded-lg px-2 text-sm font-semibold text-safety-dark hover:bg-safety-soft"
-              >
-                <ChevronLeft className="size-4" aria-hidden />
-                กลับ
-              </button>
-              {selected.type === 'request' && (
-                <RequestDetail request={selectedItem} distance={distanceKm(me, selectedItem)} />
-              )}
-              {selected.type === 'shelter' && (
-                <ShelterDetail place={selectedItem} distance={distanceKm(me, selectedItem)} />
-              )}
-              {selected.type === 'distribution' && (
-                <DistributionDetail place={selectedItem} distance={distanceKm(me, selectedItem)} />
-              )}
+            <div className="flex flex-col gap-0.5">
+              <h2 className="text-5xl font-semibold short:text-3xl">สถานการณ์ตอนนี้ อ.หาดใหญ่</h2>
+              <p className="font-body text-sm text-t3">อัปเดต {formatTime(stats.updatedAt)} · รีเฟรชทุก 15 วินาที</p>
             </div>
-          ) : (
-            <>
-              <div className="mb-3 flex rounded-xl bg-slate-100 p-1" role="tablist" aria-label="มุมมอง">
-                {[
-                  ['summary', 'สรุปสถานการณ์'],
-                  ['list', 'รายการบนแผนที่'],
-                ].map(([key, label]) => (
-                  <button
-                    key={key}
-                    role="tab"
-                    aria-selected={view === key}
-                    onClick={() => setView(key)}
-                    className={cx(
-                      'min-h-9 flex-1 cursor-pointer rounded-lg text-sm font-semibold transition-colors',
-                      view === key ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink'
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
+
+            {loadError && (
+              <p role="alert" className="flex items-start gap-2 text-md text-red-tx">
+                <WarningIcon size={18} weight="bold" className="mt-0.5 shrink-0" aria-hidden />
+                <span className="flex-1">{loadError.message}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    requests.refresh();
+                    stats.refresh();
+                  }}
+                  className="font-semibold text-acc underline"
+                >
+                  ลองใหม่
+                </button>
+              </p>
+            )}
+
+            <StatRow
+              variant="hero"
+              items={[
+                { value: fmt(s?.pending), label: 'รอความช่วยเหลือ', tone: 'red' },
+                { value: fmt(s?.active_teams), label: 'ทีมกำลังออกช่วย' },
+                { value: fmt(s?.available_beds), label: 'ที่พักยังว่าง' },
+              ]}
+            />
+
+            {criticalCount > 0 && (
+              <AlertBanner
+                level={2}
+                label={`เคสวิกฤต ${criticalCount} เคสกำลังรอ`}
+                text="หากอยู่ในพื้นที่น้ำสูง ให้ขึ้นที่สูง เตรียมเอกสารสำคัญ และปิดสวิตช์ไฟก่อนน้ำถึง"
+              />
+            )}
+
+            <Segmented
+              label="มุมมอง"
+              value={view}
+              onChange={setView}
+              options={[
+                { value: 'summary', label: 'สายด่วน' },
+                { value: 'list', label: 'รายการบนแผนที่' },
+              ]}
+            />
+
+            {view === 'summary' ? (
+              <HotlineRow />
+            ) : listItems.length === 0 ? (
+              <EmptyState>ไม่มีข้อมูลในชั้นที่เลือก</EmptyState>
+            ) : (
+              <div className="border-y border-line">
+                {listItems.map(({ type, item, distance }) =>
+                  type === 'request' ? (
+                    <CaseCard
+                      key={`request-${item.id}`}
+                      request={item}
+                      distance={distance}
+                      onSelect={() => selectFromList(type, item)}
+                    />
+                  ) : (
+                    <PlaceRow
+                      key={`${type}-${item.id}`}
+                      icon={
+                        type === 'shelter' ? (
+                          <HouseLineIcon size={20} weight="fill" className="shrink-0 text-acc" aria-hidden />
+                        ) : (
+                          <PackageIcon size={20} weight="fill" className="shrink-0 text-acc" aria-hidden />
+                        )
+                      }
+                      title={item.name}
+                      meta={
+                        type === 'shelter'
+                          ? `ที่พักพิง · ว่าง ${formatNumber(Math.max(item.capacity - item.current_occupancy, 0))} ที่`
+                          : `จุดแจกจ่าย${item.supply_types ? ` · ${item.supply_types}` : ''}`
+                      }
+                      aside={distance != null ? formatDistance(distance) : null}
+                      onSelect={() => selectFromList(type, item)}
+                    />
+                  )
+                )}
               </div>
-
-              {view === 'summary' ? (
-                <div className="flex flex-col gap-4">
-                  {myCaseNo && <MyCaseBar caseNo={myCaseNo} data={myCase.data} />}
-
-                  <div>
-                    <h2 className="text-lg font-bold">สถานการณ์ตอนนี้ อ.หาดใหญ่</h2>
-                    <p className="flex items-center gap-1.5 text-sm text-muted">
-                      <span className="size-2 rounded-full bg-shelter" aria-hidden />
-                      อัปเดต {formatTime(stats.updatedAt)} · รีเฟรชอัตโนมัติทุก 15 วินาที
-                    </p>
-                  </div>
-
-                  <ErrorBanner error={loadError} onRetry={() => { requests.refresh(); stats.refresh(); }} />
-
-                  <dl className="grid grid-cols-3 divide-x divide-line">
-                    <Stat value={s?.pending} label="รอความช่วยเหลือ" className="text-brand" />
-                    <Stat value={s?.active_teams} label="ทีมกำลังออกช่วย" />
-                    <Stat value={s?.available_beds} label="ที่พักว่าง" />
-                  </dl>
-
-                  {criticalCount > 0 && (
-                    <div className="flex gap-3 rounded-2xl border border-warn-line bg-warn-soft p-3.5">
-                      <TriangleAlert className="mt-0.5 size-5 shrink-0 text-warn" aria-hidden />
-                      <div className="text-sm">
-                        <p className="font-bold text-ink">
-                          มีเคสวิกฤต {criticalCount} เคสกำลังรอความช่วยเหลือ
-                        </p>
-                        <p className="text-muted">
-                          หากอยู่ในพื้นที่น้ำสูง ให้ขึ้นที่สูงและเตรียมเอกสารสำคัญ ปิดสวิตช์ไฟก่อนน้ำถึง
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  <div>
-                    <h3 className="mb-2 text-sm font-semibold text-muted">สายด่วนฉุกเฉิน</h3>
-                    <div className="grid grid-cols-3 gap-2">
-                      {HOTLINES.map((h) => (
-                        <a
-                          key={h.number}
-                          href={`tel:${h.number}`}
-                          className="flex flex-col items-center rounded-xl border border-line py-2 hover:bg-slate-50"
-                        >
-                          <span className="tabular flex items-center gap-1 text-lg font-bold text-brand-dark">
-                            <Phone className="size-4" aria-hidden />
-                            {h.number}
-                          </span>
-                          <span className="text-xs text-muted">{h.label}</span>
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <Legend icon={Siren} className="bg-brand" label="จุดขอความช่วยเหลือ" />
-                    <Legend icon={House} className="bg-shelter" label="ที่พักพิง" />
-                    <Legend icon={Package} className="bg-supply" label="จุดแจกจ่าย" />
-                    <Legend icon={LifeBuoy} className="bg-ink" label="หน่วยกู้ภัย" />
-                  </div>
-
-                  <Link
-                    href="/login"
-                    className="flex min-h-11 items-center justify-center gap-2 rounded-xl text-sm font-semibold text-muted hover:bg-slate-50 hover:text-ink"
-                  >
-                    <LogIn className="size-4" aria-hidden />
-                    สำหรับเจ้าหน้าที่ / อาสากู้ภัย เข้าสู่ระบบ
-                  </Link>
-                </div>
-              ) : (
-                <ul className="flex flex-col divide-y divide-line">
-                  {listItems.length === 0 && (
-                    <li className="py-8 text-center text-sm text-muted">ไม่มีข้อมูลในชั้นที่เลือก</li>
-                  )}
-                  {listItems.map(({ type, item, distance }) => (
-                    <li key={`${type}-${item.id}`}>
-                      <ListRow type={type} item={item} distance={distance} onClick={() => selectFromList(type, item)} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
-          )}
-        </div>
-      </section>
-    </div>
+            )}
+          </>
+        )}
+      </MapSheet>
+    </>
   );
 }
 
-// ปุ่มเข้าสู่ระบบเจ้าหน้าที่ — ถ้า login อยู่แล้วพาไปหน้าตาม role
-function StaffButton() {
-  const { user } = useAuth();
-  const href = user ? ROLE_HOME[user.role] : '/login';
-  return (
-    <Link
-      href={href}
-      className="mr-3 flex min-h-10 shrink-0 items-center gap-1.5 rounded-full bg-ink px-3.5 text-sm font-semibold text-white shadow-[var(--shadow-float)] hover:bg-slate-800"
-    >
-      {user ? <LifeBuoy className="size-4" aria-hidden /> : <LogIn className="size-4" aria-hidden />}
-      <span className="hidden sm:inline">{user ? 'หน้าเจ้าหน้าที่' : 'เข้าสู่ระบบเจ้าหน้าที่'}</span>
-      <span className="sm:hidden">{user ? 'เจ้าหน้าที่' : 'เข้าสู่ระบบ'}</span>
-    </Link>
-  );
-}
-
-function Stat({ value, label, className }) {
-  return (
-    <div className="px-2 first:pl-0">
-      <dd className={cx('tabular text-2xl font-bold sm:text-3xl', className)}>
-        {value == null ? '–' : formatNumber(value)}
-      </dd>
-      <dt className="text-xs text-muted sm:text-sm">{label}</dt>
-    </div>
-  );
-}
-
-function Legend({ icon: Icon, className, label }) {
-  return (
-    <span className="flex items-center gap-2 text-muted">
-      <span className={cx('grid size-6 place-items-center rounded-full text-white', className)}>
-        <Icon className="size-3.5" aria-hidden />
-      </span>
-      {label}
-    </span>
-  );
-}
-
-function MyCaseBar({ caseNo, data }) {
+function MyCaseRow({ caseNo, data }) {
   const status = data ? STATUS[data.status]?.label : 'กำลังโหลดสถานะ…';
   return (
     <Link
       href={`/track?case=${caseNo}`}
-      className="flex items-center gap-3 rounded-2xl border border-safety/40 bg-safety-soft p-3 hover:bg-blue-100"
+      className="flex items-center gap-3 border-y border-line py-2.5 text-ink no-underline hover:bg-s1"
     >
-      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-safety text-white">
-        <FileSearch className="size-4" aria-hidden />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="tabular block font-bold text-ink">เคสของฉัน {caseNo}</span>
-        <span className="block truncate text-sm text-safety-dark">
+      <FileMagnifyingGlassIcon size={22} className="shrink-0 text-acc" aria-hidden />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-md font-bold">
+          เคสของฉัน <span className="tabular-nums">{caseNo}</span>
+        </span>
+        <span className="truncate font-body text-sm text-t2">
           {status}
           {data?.rescuer_team && ` · ${data.rescuer_team}`}
         </span>
       </span>
-      <ChevronRight className="size-5 text-safety-dark" aria-hidden />
+      <CaretRightIcon size={18} className="shrink-0 text-t3" aria-hidden />
     </Link>
-  );
-}
-
-const ROW_STYLE = {
-  request: { icon: Siren, className: 'bg-brand' },
-  shelter: { icon: House, className: 'bg-shelter' },
-  distribution: { icon: Package, className: 'bg-supply' },
-};
-
-function ListRow({ type, item, distance, onClick }) {
-  const { icon: Icon, className } = ROW_STYLE[type];
-  let title;
-  let sub;
-  if (type === 'request') {
-    title = `เคส ${item.case_no} · ${URGENCY[item.urgency]?.label}`;
-    sub = `${item.people_count} คน · ${STATUS[item.status]?.label} · ${timeAgo(item.created_at)}`;
-  } else if (type === 'shelter') {
-    title = item.name;
-    sub = `ที่พักพิง · ว่าง ${formatNumber(Math.max(item.capacity - item.current_occupancy, 0))} ที่`;
-  } else {
-    title = item.name;
-    sub = `จุดแจกจ่าย · ${item.supply_types || ''}`;
-  }
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex w-full cursor-pointer items-center gap-3 py-3 text-left hover:bg-slate-50"
-    >
-      <span className={cx('grid size-9 shrink-0 place-items-center rounded-full text-white', className)}>
-        <Icon className="size-4" aria-hidden />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate font-semibold">{title}</span>
-        <span className="block truncate text-sm text-muted">{sub}</span>
-      </span>
-      {distance != null && <span className="tabular shrink-0 text-sm text-muted">{formatDistance(distance)}</span>}
-    </button>
   );
 }

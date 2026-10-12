@@ -1,0 +1,49 @@
+# dependencies (ทุกโฟลเดอร์)
+node_modules/
+.pnp
+.pnp.*
+
+# environment variables (เก็บไว้เฉพาะไฟล์ตัวอย่าง)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Next.js / build output
+.next/
+out/
+build/
+dist/
+next-env.d.ts
+*.tsbuildinfo
+
+# Vercel
+.vercel
+
+# testing
+coverage/
+
+# logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# AI agent / Claude Code (skills ที่ติดตั้งในเครื่อง + ค่าส่วนตัว)
+.agents/
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# editor
+.vscode/
+.idea/
+*.swp
+
+# misc
+*.pem

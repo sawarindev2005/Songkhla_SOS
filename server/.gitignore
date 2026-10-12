@@ -1,0 +1,27 @@
+# dependencies
+/node_modules
+
+# environment variables (เก็บไว้เฉพาะไฟล์ตัวอย่าง)
+.env
+.env.*
+!.env.example
+
+# build output
+/dist
+/build
+
+# testing
+/coverage
+
+# logs
+logs/
+*.log
+npm-debug.log*
+
+# uploads / temp
+/uploads
+/tmp
+
+# OS
+.DS_Store
+Thumbs.db

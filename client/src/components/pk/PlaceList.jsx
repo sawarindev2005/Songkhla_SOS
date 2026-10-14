@@ -199,10 +199,10 @@ export function PlaceList({ type }) {
                     }
                     title={p.name}
                     meta={
-                      <>
+                      <span className="flex min-w-0 items-center gap-2">
                         <PlaceStatusBadge kind={type} status={p.status} />
-                        {cfg.meta(p) && <span className="ml-2">{cfg.meta(p)}</span>}
-                      </>
+                        {cfg.meta(p) && <span className="min-w-0 truncate">{cfg.meta(p)}</span>}
+                      </span>
                     }
                     aside={p.distance != null ? formatDistance(p.distance) : null}
                     onSelect={() => choose(p)}

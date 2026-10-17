@@ -1,10 +1,10 @@
 import { CheckCircleIcon, HouseLineIcon, LifebuoyIcon, MapPinIcon, NavigationArrowIcon, PackageIcon } from './icons';
-import { isUrgent, URGENCY_PIN_BG, UrgencyIcon } from './domain';
+import { isUrgent, URGENCY_BG, UrgencyIcon } from './domain';
 import { cn } from './cn';
 
 const base = 'grid place-items-center border-[2.5px] border-white text-white';
 
-/** หมุดเคส: รอ → สีตามความด่วน (วิกฤตแดง เร่งด่วนส้ม ปานกลางเหลือง ไม่เร่งด่วนเทา), ทีมกำลังไปสีน้ำเงิน, จบแล้วสีเทา  big = เคสที่กำลังดู */
+/** หมุดเคส: รอ = สีตามความเร่งด่วน (แดง/ส้ม/เหลือง/เทา), ทีมกำลังไปสีน้ำเงิน, จบแล้วสีเทา  big = เคสที่กำลังดู */
 export function CasePin({ urgency, status = 'pending', big = false }) {
   const finished = status === 'rescued' || status === 'cancelled';
   const going = status === 'assigned' || status === 'in_progress';
@@ -12,7 +12,7 @@ export function CasePin({ urgency, status = 'pending', big = false }) {
   const s = big ? 18 : 16;
   return (
     <span className={cn(base, 'rounded-full',
-      finished ? 'bg-t4' : going ? 'bg-acc' : URGENCY_PIN_BG[urgency] || URGENCY_PIN_BG.medium,
+      finished ? 'bg-t4' : going ? 'bg-acc' : URGENCY_BG[urgency] || URGENCY_BG.medium,
       big ? cn('size-9', urgent && !finished ? 'shadow-halo-red-lg' : 'shadow-halo-amb') : 'size-7.5',
       !big && (urgency === 'critical' && status === 'pending' ? 'shadow-halo-red' : 'shadow-pin'))}>
       {finished ? <CheckCircleIcon size={s} aria-hidden />

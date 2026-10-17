@@ -9,9 +9,9 @@ export const isUrgent = (urgency) => urgency === 'critical' || urgency === 'high
 
 // สีตามระดับความด่วน: วิกฤต แดง | เร่งด่วน ส้ม | ปานกลาง เหลือง | ไม่เร่งด่วน เทา
 // ตัวหนังสือใช้โทนเข้ม (อ่านชัดบนพื้นขาว) ไอคอน/หมุดใช้โทนสด ให้แยกส้มกับเหลืองออกง่าย
-export const URGENCY_TONE = { critical: 'red', high: 'orange', medium: 'amber', low: 'gray' };
-export const URGENCY_ICON_TEXT = { critical: 'text-red', high: 'text-org', medium: 'text-amb', low: 'text-t3' };
-export const URGENCY_PIN_BG = { critical: 'bg-red', high: 'bg-org', medium: 'bg-amb', low: 'bg-t3' };
+export const URGENCY_TONE = { critical: 'red', high: 'orange', medium: 'yellow', low: 'gray' };
+export const URGENCY_TEXT = { critical: 'text-red', high: 'text-org', medium: 'text-yel', low: 'text-t3' };
+export const URGENCY_BG = { critical: 'bg-red', high: 'bg-org', medium: 'bg-yel', low: 'bg-t3' };
 
 export function UrgencyIcon({ urgency, size = 20, className }) {
   if (isUrgent(urgency)) return <WarningCircleIcon size={size} weight="fill" className={className} aria-hidden />;
@@ -22,8 +22,8 @@ export function UrgencyBadge({ urgency }) {
   const u = URGENCY[urgency] || URGENCY.medium;
   return (
     <Badge
-      tone={URGENCY_TONE[urgency] || 'amber'}
-      icon={<UrgencyIcon urgency={urgency} size={15} className={URGENCY_ICON_TEXT[urgency] || URGENCY_ICON_TEXT.medium} />}
+      tone={URGENCY_TONE[urgency] || 'yellow'}
+      icon={<UrgencyIcon urgency={urgency} size={15} className={URGENCY_TEXT[urgency] || URGENCY_TEXT.medium} />}
     >
       {u.label}
     </Badge>

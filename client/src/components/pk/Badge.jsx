@@ -3,7 +3,8 @@ import { cn } from './cn';
 export const TONE_TEXT = {
   red: 'text-red',
   amber: 'text-amb-tx',
-  orange: 'text-org-tx',
+  orange: 'text-org',
+  yellow: 'text-yel-tx',
   accent: 'text-acc',
   ok: 'text-ok',
   gray: 'text-t3',

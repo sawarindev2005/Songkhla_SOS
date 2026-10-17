@@ -1,4 +1,5 @@
 'use client';
+import { useRef } from 'react';
 import { cn } from './cn';
 
 /** soft = ตัวกรองในหน้ารายการ  map = ปุ่มลอยบนแผนที่  layer = ปุ่มเปิดปิดชั้นข้อมูล (muted คือปิดอยู่) */
@@ -26,9 +27,47 @@ export function Chip({ selected = false, muted = false, layer = false, count, ic
   );
 }
 
+/**
+ * แถวชิปเลื่อนแนวนอน: มือถือปัดนิ้วได้เอง  เมาส์ลากแถวเพื่อเลื่อนได้ และหมุนล้อเมาส์ = เลื่อนซ้าย/ขวา
+ * ลากแล้วปล่อยบนชิป → ไม่นับเป็นการกดชิป
+ */
 export function ChipRow({ children, label, className }) {
+  const drag = useRef(null);
+
+  function handlePointerDown(e) {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return; // นิ้ว/ปากกาใช้การเลื่อนของเบราว์เซอร์
+    const el = e.currentTarget;
+    const start = { x: e.clientX, left: el.scrollLeft, moved: false };
+    drag.current = start;
+    const move = (ev) => {
+      const dx = ev.clientX - start.x;
+      if (Math.abs(dx) > 5) start.moved = true;
+      if (start.moved) el.scrollLeft = start.left - dx;
+    };
+    const end = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+  }
+
   return (
-    <div role="group" aria-label={label} className={cn('flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden', className)}>
+    <div
+      role="group"
+      aria-label={label}
+      onPointerDown={handlePointerDown}
+      onClickCapture={(e) => {
+        if (!drag.current?.moved) return;
+        e.preventDefault();
+        e.stopPropagation();
+        drag.current = null;
+      }}
+      onWheel={(e) => {
+        if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.currentTarget.scrollLeft += e.deltaY;
+      }}
+      className={cn('flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden', className)}
+    >
       {children}
     </div>
   );

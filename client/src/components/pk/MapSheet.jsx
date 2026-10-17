@@ -1,21 +1,155 @@
 'use client';
+import { useEffect, useId, useRef, useState } from 'react';
 import { cn } from './cn';
 
-export function MapSheet({ children, summary, collapsed = false, onToggle, toolbar, className, label }) {
+// ระยะลาก (px) ที่ต้องเกินก่อนจะย่อ/ขยายแผ่น ถ้าน้อยกว่านี้จะเด้งกลับที่เดิม
+const DRAG_THRESHOLD = 48;
+// ความสูงแผ่นตอนครึ่งจอแบบ peek = เท่ากับแผ่นหน้าภาพรวม (ที่จับ + หัวข้อ + ตัวเลข 3 ช่อง) วัดจากจอจริง
+// แก้หัวหรือตัวเลขหน้าภาพรวมแล้วความสูงเปลี่ยน ต้องวัดใหม่ให้สองหน้ายังเท่ากัน
+const PEEK_HEIGHT = 'h-[167px] short:h-[156px]';
+
+/**
+ * แผ่นข้อมูลด้านล่างแผนที่ 3 ระดับ: ย่อ (แถวสรุป) → ครึ่งจอ (ค่าเริ่มต้นเมื่อขยาย ยังเห็นแผนที่) → เต็มสูง
+ * ลากที่จับขึ้น/ลงเพื่อเลื่อนทีละระดับ  collapsed/onToggle คุมการย่อจากภายนอก ส่วนครึ่งจอ/เต็มสูงคุมภายใน
+ * header = หัวข้อที่ค้างอยู่ใต้ที่จับตอนเลื่อนเนื้อหา (ซ่อนตอนย่อ)  children = เนื้อหาที่เลื่อนได้
+ * peek = ครึ่งจอเตี้ยเท่าแผ่นหน้าภาพรวม (แผนที่เห็นมากขึ้น) ลากขึ้น/เลื่อนเนื้อหาเพื่อดูต่อ
+ * expandable = false → มีแค่ ย่อ / ครึ่งจอ ลากขึ้นหรือเลื่อนแล้วไม่ขยายเต็มสูง
+ * hideToolbarWhenFull = ซ่อนปุ่มลอยตอนขยายเต็มสูง (เช่น ตอนดูรายละเอียดจุด ไม่ให้บังหมุดที่เลือก)
+ * onFullChange(full) = แจ้งเมื่อแผ่นเข้า/ออกจากเต็มสูง (รวมตอนย่อแผ่น) เช่น ใช้ย่อรายการกลับตอนลากแผ่นลง
+ */
+export function MapSheet({
+  ref, children, header, summary, collapsed = false, onToggle, toolbar, className, label,
+  peek = false, expandable = true, hideToolbarWhenFull = false, onFullChange,
+}) {
+  const dragged = useRef(false); // กันไม่ให้ click หลังลากเสร็จ toggle ซ้ำ
+  const [offset, setOffset] = useState(0);
+  const [scrolled, setScrolled] = useState(false);
+  const [full, setFull] = useState(false);
+  const bodyId = useId(); // ให้ปุ่มที่จับบอกโปรแกรมอ่านหน้าจอว่าคุมเนื้อหาส่วนไหน
+  // ถูกย่อ (รวมถึงแตะแผนที่จากภายนอก) → ขยายครั้งถัดไปเริ่มที่ครึ่งจอเสมอ
+  if (collapsed && full) setFull(false);
+  // เลิกให้ขยาย (เช่น กลับจากรายละเอียดไปหน้าสรุป) → ลดกลับครึ่งจอ
+  if (!expandable && full) setFull(false);
+  const toolbarHidden = full && hideToolbarWhenFull;
+
+  // แจ้งออกไปเฉพาะตอนระดับเปลี่ยนจริง (เก็บ callback ล่าสุดไว้ใน ref ไม่ให้ทำงานซ้ำทุก render)
+  const onFullChangeRef = useRef(onFullChange);
+  useEffect(() => {
+    onFullChangeRef.current = onFullChange;
+  });
+  useEffect(() => {
+    onFullChangeRef.current?.(full);
+  }, [full]);
+
+  // ลากได้ทั้งหัวแผ่น (ที่จับ + header) เริ่มกดแล้วติดตามการขยับทั้งหน้าต่าง นิ้วหลุดออกนอกหัวแผ่นก็ยังลากต่อได้
+  // ไม่จับ pointer ไว้กับหัวแผ่น ปุ่มในหัว (เช่น "กลับ") จึงยังกดได้ตามปกติ
+  function handlePointerDown(e) {
+    if (!onToggle || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const startY = e.clientY;
+    let moved = false;
+    dragged.current = false;
+
+    const move = (ev) => {
+      const dy = ev.clientY - startY;
+      if (!moved && Math.abs(dy) > 4) moved = true;
+      // ขยายอยู่ → แผ่นเลื่อนลงตามนิ้ว | ย่ออยู่ → ไม่ขยับ ปล่อยแล้วค่อยขยาย
+      if (moved && !collapsed) setOffset(Math.max(dy, 0));
+    };
+    const end = (ev) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+      setOffset(0);
+      if (!moved || ev.type === 'pointercancel') return;
+      dragged.current = true;
+      const dy = ev.clientY - startY;
+      const up = dy <= -DRAG_THRESHOLD;
+      const down = dy >= DRAG_THRESHOLD;
+      // ย่อ ↑ ครึ่งจอ ↑ เต็มสูง | เต็มสูง ↓ ครึ่งจอ ↓ ย่อ
+      if (collapsed) {
+        if (up) onToggle();
+      } else if (full) {
+        if (down) setFull(false);
+      } else if (up) {
+        if (expandable) setFull(true);
+      } else if (down) {
+        onToggle();
+      }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+  }
+
+  function handleClick() {
+    if (dragged.current) {
+      dragged.current = false;
+      return;
+    }
+    onToggle?.();
+  }
+
   return (
-    <div className={cn('pointer-events-none absolute inset-x-0 bottom-0 z-[500] flex max-h-[calc(100%-112px)] flex-col', className)}>
-      {toolbar && <div className="pointer-events-auto flex items-center justify-between px-3 pb-3">{toolbar}</div>}
-      <section aria-label={label} className="pointer-events-auto flex min-h-0 flex-col gap-3.5 overflow-y-auto rounded-t-3xl bg-white px-4 pt-2 pb-4 shadow-sheet short:gap-2.5">
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? 'ขยายแผ่นข้อมูล' : 'ย่อแผ่นข้อมูล'}
-          className="-mt-1.5 -mb-2.5 flex justify-center pt-1 pb-1.5"
+    <div
+      ref={ref}
+      className={cn(
+        'pointer-events-none absolute inset-x-0 bottom-0 z-[500] flex flex-col',
+        full ? 'max-h-[calc(100%-112px)]' : 'max-h-[50%]',
+        offset === 0 && 'transition-[transform,max-height] duration-200 ease-out motion-reduce:transition-none',
+        className,
+      )}
+      style={offset ? { transform: `translateY(${offset}px)` } : undefined}
+    >
+      {/* hideToolbarWhenFull + ขยายเต็มสูง → ซ่อนปุ่มลอย ไม่ให้บังแผนที่ที่เหลือน้อยและหมุดที่เลือก
+          invisible = ออกจากลำดับ Tab ด้วย  ลดกลับครึ่งจอ → แสดงอีกครั้ง */}
+      {toolbar && (
+        <div
+          aria-hidden={toolbarHidden || undefined}
+          className={cn(
+            'flex items-center justify-between px-3 pb-3 transition-[opacity,visibility] duration-200 motion-reduce:transition-none',
+            toolbarHidden ? 'invisible opacity-0' : 'pointer-events-auto',
+          )}
         >
-          <span aria-hidden className="h-1 w-9 rounded-full bg-line2" />
-        </button>
-        {collapsed ? summary : children}
+          {toolbar}
+        </div>
+      )}
+      <section
+        aria-label={label}
+        className={cn('pointer-events-auto flex min-h-0 flex-col rounded-t-3xl bg-white shadow-sheet', peek && !full && !collapsed && PEEK_HEIGHT)}
+      >
+        {/* หัวแผ่น (ที่จับ + header) อยู่กับที่ เลื่อนเฉพาะเนื้อหาด้านล่าง มีเส้นคั่นเมื่อเนื้อหาเลื่อนลอดหัว */}
+        <div
+          onPointerDown={handlePointerDown}
+          className={cn('flex shrink-0 touch-none flex-col gap-3.5 border-b px-4 pt-2 select-none short:gap-2.5', scrolled && !collapsed ? 'border-line' : 'border-transparent')}
+        >
+          <button
+            type="button"
+            onClick={handleClick}
+            aria-expanded={!collapsed}
+            aria-controls={bodyId}
+            aria-label={collapsed ? 'ขยายแผ่นข้อมูล' : expandable ? 'ย่อแผ่นข้อมูล (ลากขึ้นเพื่อขยายเต็มจอ)' : 'ย่อแผ่นข้อมูล'}
+            className="-mt-2 -mb-4.5 flex cursor-grab touch-none justify-center pt-2 pb-3 active:cursor-grabbing"
+          >
+            <span aria-hidden className="h-1 w-9 rounded-full bg-line2" />
+          </button>
+          {!collapsed && header}
+        </div>
+        {/* ลูกทุกตัว shrink-0 → เนื้อหายาวแล้วเลื่อนแทนการบีบให้เตี้ยลง
+            ขยายอยู่ → เว้นล่างให้พ้นปุ่มขอช่วยเหลือที่ยื่นขึ้นมาจากแถบเมนู เลื่อนแล้วเห็นแถวสุดท้ายครบ */}
+        {/* ย่ออยู่ → แตะตรงไหนของแถวสรุปก็ขยาย (คีย์บอร์ดใช้ปุ่มที่จับด้านบน) */}
+        <div
+          id={bodyId}
+          onScroll={(e) => {
+            const top = e.currentTarget.scrollTop;
+            setScrolled(top > 0);
+            // ครึ่งจออยู่แล้วเลื่อนดูเนื้อหาต่อ → ขยายเต็มสูงให้เห็นมากขึ้น
+            if (top > 0 && expandable && !full && !collapsed) setFull(true);
+          }}
+          onClick={collapsed ? onToggle : undefined}
+          className={cn('flex min-h-0 flex-col gap-3.5 overflow-y-auto px-4 pt-3.5 short:gap-2.5 short:pt-2.5 [&>*]:shrink-0', collapsed ? 'cursor-pointer pb-4' : 'pb-10')}
+        >
+          {collapsed ? summary : children}
+        </div>
       </section>
     </div>
   );

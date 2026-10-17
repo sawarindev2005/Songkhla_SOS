@@ -1,9 +1,9 @@
 import { directionsUrl, formatDistance, formatNumber, timeAgo, vulnerableLabels } from '@/lib/format';
-import { ClockIcon, MapPinIcon, NavigationArrowIcon, PackageIcon, PhoneIcon, UsersIcon } from './icons';
+import { ClockCounterClockwiseIcon, ClockIcon, MapPinIcon, NavigationArrowIcon, PackageIcon, PhoneIcon, UsersIcon } from './icons';
 import { Badge } from './Badge';
 import { Button } from './Button';
 import { StatRow } from './StatRow';
-import { CaseStatusBadge, PlaceStatusBadge, UrgencyBadge } from './domain';
+import { CaseStatusBadge, isNearFull, openHours, PlaceStatusBadge, shelterFree, UrgencyBadge, waitMinutes } from './domain';
 
 function Row({ icon: Icon, children }) {
   return (
@@ -62,8 +62,26 @@ export function RequestPublicDetail({ request: r, distance }) {
   );
 }
 
+// ข้อมูลเก่ากว่านี้ (นาที) → เตือนว่าอาจไม่เป็นปัจจุบัน
+const STALE_MINUTES = 120;
+
+/** แถว "อัปเดตข้อมูลเมื่อ…" ถ้าเก่าเกินไปขึ้นเตือนสีเหลือง (มีเบอร์ → แนะนำให้โทรถามก่อนไป) */
+function UpdatedRow({ at, phone }) {
+  if (!at) return null;
+  const stale = waitMinutes(at) >= STALE_MINUTES;
+  return (
+    <Row icon={ClockCounterClockwiseIcon}>
+      อัปเดตข้อมูล {timeAgo(at)}
+      {stale && (
+        <span className="font-semibold text-amb-tx"> · ข้อมูลอาจไม่เป็นปัจจุบัน{phone && ' ควรโทรถามก่อนไป'}</span>
+      )}
+    </Row>
+  );
+}
+
 export function ShelterPublicDetail({ place: s, distance }) {
-  const free = Math.max(s.capacity - s.current_occupancy, 0);
+  const free = shelterFree(s);
+  const nearFull = isNearFull(s);
   return (
     <div className="flex flex-col gap-3">
       <Header title={s.name}>
@@ -72,22 +90,25 @@ export function ShelterPublicDetail({ place: s, distance }) {
       </Header>
       <StatRow
         items={[
-          { value: formatNumber(free), label: 'ที่ว่าง', tone: free > 0 ? 'ok' : 'red' },
+          {
+            value: formatNumber(free),
+            label: nearFull ? 'ที่ว่าง · ใกล้เต็ม' : 'ที่ว่าง',
+            tone: free === 0 ? 'red' : nearFull ? 'org' : 'ok',
+          },
           { value: formatNumber(s.current_occupancy), label: 'พักอยู่' },
           { value: formatNumber(s.capacity), label: 'รับได้ทั้งหมด' },
         ]}
       />
       {s.address && <Row icon={MapPinIcon}>{s.address}</Row>}
       {s.facilities && <Row icon={PackageIcon}>{s.facilities}</Row>}
+      <UpdatedRow at={s.updated_at} phone={s.contact_phone} />
       <Actions lat={s.lat} lng={s.lng} phone={s.contact_phone} />
     </div>
   );
 }
 
-const hhmm = (t) => (t ? String(t).slice(0, 5) : null);
-
 export function DistributionPublicDetail({ place: d, distance }) {
-  const hours = hhmm(d.open_time) && hhmm(d.close_time) ? `${hhmm(d.open_time)}–${hhmm(d.close_time)} น.` : null;
+  const hours = openHours(d);
   return (
     <div className="flex flex-col gap-3">
       <Header title={d.name}>
@@ -103,6 +124,7 @@ export function DistributionPublicDetail({ place: d, distance }) {
       )}
       {hours && <Row icon={ClockIcon}>เปิดแจก {hours}</Row>}
       {d.address && <Row icon={MapPinIcon}>{d.address}</Row>}
+      <UpdatedRow at={d.updated_at} phone={d.contact_phone} />
       <Actions lat={d.lat} lng={d.lng} phone={d.contact_phone} />
     </div>
   );

@@ -1,20 +1,24 @@
 import Link from 'next/link';
 import { BabyIcon, MapPinIcon, UsersIcon, WheelchairIcon } from './icons';
-import { formatDistance, STATUS, URGENCY } from '@/lib/format';
-import { isUrgent, UrgencyIcon, formatWait, waitMinutes } from './domain';
+import { formatDistance, STATUS, timeAgo, URGENCY, vulnerableLabels } from '@/lib/format';
+import { CaseStatusBadge, URGENCY_ICON_TEXT, UrgencyIcon, formatWait, waitMinutes } from './domain';
 import { cn } from './cn';
 
 const ROW = 'flex w-full items-start gap-3 border-b border-line bg-white px-1 py-3 text-left text-ink no-underline last:border-b-0 hover:bg-s1 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-acc short:py-2.25';
 
-/** แถวเคสในรายการ วางต่อกันได้เลย เส้นคั่นอยู่ในตัว  request = ข้อมูลเคสจาก API */
-export function CaseCard({ request: r, distance, href, onSelect }) {
+/**
+ * แถวเคสในรายการ วางต่อกันได้เลย เส้นคั่นอยู่ในตัว  request = ข้อมูลเคสจาก API
+ * detailed = แบบละเอียดสำหรับประชาชน: ป้ายสถานะ + รายละเอียดที่แจ้ง + แจ้งเมื่อไร + กลุ่มเปราะบาง (ไม่มีข้อมูลติดต่อ)
+ */
+export function CaseCard({ request: r, distance, href, onSelect, detailed = false }) {
+  if (detailed) return <DetailedCaseRow r={r} distance={distance} href={href} onSelect={onSelect} />;
   const pending = r.status === 'pending';
   const wait = pending ? waitMinutes(r.created_at) : null;
   const vulnerable = r.has_children || r.has_elderly || r.has_disabled || r.has_patient;
   const VulIcon = r.has_children ? BabyIcon : WheelchairIcon;
   const body = (
     <>
-      <UrgencyIcon urgency={r.urgency} className={cn('mt-0.5 shrink-0', isUrgent(r.urgency) ? 'text-red' : r.urgency === 'low' ? 'text-t3' : 'text-amb')} />
+      <UrgencyIcon urgency={r.urgency} className={cn('mt-0.5 shrink-0', URGENCY_ICON_TEXT[r.urgency] || URGENCY_ICON_TEXT.medium)} />
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="flex items-baseline gap-3">
           <span className="min-w-0 flex-1 truncate text-md font-bold">
@@ -37,6 +41,37 @@ export function CaseCard({ request: r, distance, href, onSelect }) {
           <span className="inline-flex items-center gap-1"><UsersIcon size={14} aria-hidden />{r.people_count} คน</span>
           {vulnerable && <VulIcon size={16} aria-label="มีกลุ่มเปราะบาง" role="img" />}
         </span>
+      </span>
+    </>
+  );
+  if (href) return <Link href={href} className={ROW}>{body}</Link>;
+  return <button type="button" onClick={onSelect} className={ROW}>{body}</button>;
+}
+
+function DetailedCaseRow({ r, distance, href, onSelect }) {
+  const vulnerable = vulnerableLabels(r);
+  const body = (
+    <>
+      <UrgencyIcon urgency={r.urgency} className={cn('mt-0.5 shrink-0', URGENCY_ICON_TEXT[r.urgency] || URGENCY_ICON_TEXT.medium)} />
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="flex items-center gap-2">
+          <span className="min-w-0 flex-1 truncate text-md font-bold">
+            เคส <span className="tabular-nums">{r.case_no}</span> · {URGENCY[r.urgency]?.label}
+          </span>
+          <CaseStatusBadge status={r.status} />
+        </span>
+        {r.description && <span className="line-clamp-2 font-body text-sm text-ink">{r.description}</span>}
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1 font-body text-sm text-t2">
+          {(r.address_note || distance != null) && (
+            <span className="inline-flex min-w-0 items-center gap-1">
+              <MapPinIcon size={14} aria-hidden />
+              <span className="truncate">{[r.address_note, formatDistance(distance)].filter(Boolean).join(' ')}</span>
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1"><UsersIcon size={14} aria-hidden />{r.people_count} คน</span>
+          {vulnerable.length > 0 && <span>{vulnerable.join(' · ')}</span>}
+        </span>
+        <span className="font-body text-xs text-t3 tabular-nums">แจ้งเมื่อ {timeAgo(r.created_at)}</span>
       </span>
     </>
   );

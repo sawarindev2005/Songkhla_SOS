@@ -7,7 +7,11 @@ import { Badge } from './Badge';
 
 export const isUrgent = (urgency) => urgency === 'critical' || urgency === 'high';
 
-export const URGENCY_TONE = { critical: 'red', high: 'red', medium: 'amber', low: 'gray' };
+// สีตามระดับความด่วน: วิกฤต แดง | เร่งด่วน ส้ม | ปานกลาง เหลือง | ไม่เร่งด่วน เทา
+// ตัวหนังสือใช้โทนเข้ม (อ่านชัดบนพื้นขาว) ไอคอน/หมุดใช้โทนสด ให้แยกส้มกับเหลืองออกง่าย
+export const URGENCY_TONE = { critical: 'red', high: 'orange', medium: 'amber', low: 'gray' };
+export const URGENCY_ICON_TEXT = { critical: 'text-red', high: 'text-org', medium: 'text-amb', low: 'text-t3' };
+export const URGENCY_PIN_BG = { critical: 'bg-red', high: 'bg-org', medium: 'bg-amb', low: 'bg-t3' };
 
 export function UrgencyIcon({ urgency, size = 20, className }) {
   if (isUrgent(urgency)) return <WarningCircleIcon size={size} weight="fill" className={className} aria-hidden />;
@@ -17,7 +21,10 @@ export function UrgencyIcon({ urgency, size = 20, className }) {
 export function UrgencyBadge({ urgency }) {
   const u = URGENCY[urgency] || URGENCY.medium;
   return (
-    <Badge tone={URGENCY_TONE[urgency] || 'amber'} icon={<UrgencyIcon urgency={urgency} size={15} />}>
+    <Badge
+      tone={URGENCY_TONE[urgency] || 'amber'}
+      icon={<UrgencyIcon urgency={urgency} size={15} className={URGENCY_ICON_TEXT[urgency] || URGENCY_ICON_TEXT.medium} />}
+    >
       {u.label}
     </Badge>
   );
@@ -69,3 +76,16 @@ export function formatWait(mins) {
   const h = Math.floor(mins / 60);
   return h < 24 ? `${h} ชม.` : `${Math.floor(h / 24)} วัน`;
 }
+
+// เวลาเปิดแจก "07:00–20:00 น." (ไม่มีข้อมูลเวลา → null)
+const hhmm = (t) => (t ? String(t).slice(0, 5) : null);
+export const openHours = (d) =>
+  hhmm(d.open_time) && hhmm(d.close_time) ? `${hhmm(d.open_time)}–${hhmm(d.close_time)} น.` : null;
+
+// ที่พักพิงใกล้เต็ม: ยังว่างอยู่แต่เหลือน้อยกว่า 10% ของที่รับได้
+const NEAR_FULL_RATIO = 0.1;
+export const shelterFree = (s) => Math.max(s.capacity - s.current_occupancy, 0);
+export const isNearFull = (s) => {
+  const free = shelterFree(s);
+  return free > 0 && s.capacity > 0 && free / s.capacity < NEAR_FULL_RATIO;
+};

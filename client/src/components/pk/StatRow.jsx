@@ -1,8 +1,8 @@
 import { cn } from './cn';
 
-const TONE = { ink: 'text-ink', red: 'text-red', ok: 'text-ok' };
+const TONE = { ink: 'text-ink', red: 'text-red', ok: 'text-ok', org: 'text-org-tx' };
 
-/** boxed = กล่องมีเส้นขอบ ตัวเลขกลาง (หน้ารายละเอียด) | hero = ตัวเลขใหญ่ชิดซ้าย (แผ่นสรุปบนแผนที่) */
+/** boxed = กล่องมีเส้นขอบ ตัวเลขกลาง (หน้ารายละเอียด) | hero = ตัวเลขใหญ่กึ่งกลางเหนือข้อความ (แผ่นสรุปบนแผนที่) */
 export function StatRow({ items, variant = 'boxed' }) {
   const hero = variant === 'hero';
   return (
@@ -11,7 +11,7 @@ export function StatRow({ items, variant = 'boxed' }) {
       style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
     >
       {items.map((s, i) => (
-        <div key={i} className={cn('flex flex-col', hero ? 'items-start pl-3.5 first:pl-0' : 'items-center px-1 text-center', i > 0 && 'border-l border-line')}>
+        <div key={i} className={cn('flex flex-col items-center px-1 text-center', i > 0 && 'border-l border-line')}>
           <span className={cn('tabular-nums', hero ? 'text-6xl font-bold' : 'text-xl font-semibold', TONE[s.tone ?? 'ink'])}>{s.value}</span>
           <span className="font-body text-xs text-t2">{s.label}</span>
         </div>

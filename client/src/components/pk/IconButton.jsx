@@ -5,6 +5,8 @@ const TONE = {
   plain: 'text-ink',
   surface: 'bg-s2 text-t2',
   float: 'bg-white text-ink shadow-float',
+  // ปุ่มลอยที่เปิดใช้งานอยู่ (เช่น ◎ ตอนกำลังแสดงตำแหน่งของฉัน)
+  accent: 'bg-acc text-white shadow-float',
   outline: 'border border-line2 bg-white text-ink',
 };
 

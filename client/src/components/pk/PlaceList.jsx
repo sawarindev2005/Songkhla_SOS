@@ -1,44 +1,50 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { MapView } from '@/components/map';
 import { usePolling } from '@/hooks/usePolling';
+import { useVisibleMyCases } from '@/hooks/useVisibleMyCases';
+import { buildAnnouncements } from '@/lib/announcements';
 import { distanceKm, formatDistance, formatNumber } from '@/lib/format';
 import { CaretLeftIcon, CircleNotchIcon, CrosshairIcon, HouseLineIcon, MagnifyingGlassIcon, PackageIcon, WarningIcon } from './icons';
 import { PlaceRow } from './CaseCard';
-import { Chip, ChipRow } from './Chip';
 import { EmptyState } from './EmptyState';
 import { IconButton } from './IconButton';
 import { MapSheet } from './MapSheet';
+import { MyCaseCard } from './MyCaseCard';
+import { NewsTicker } from './NewsTicker';
+import { HotlineFab } from './HotlineFab';
 import { DistributionPublicDetail, ShelterPublicDetail } from './PublicDetail';
 import { SearchField } from './TextField';
 import { useToast } from './Toast';
-import { PlaceStatusBadge } from './domain';
+import { isNearFull, openHours, PlaceStatusBadge, shelterFree } from './domain';
 
 const CONFIG = {
   shelter: {
     path: '/shelters',
     title: 'ที่พักพิง',
-    desc: 'ศูนย์พักพิงชั่วคราวที่เปิดรับผู้ประสบภัย',
     openStatus: 'open',
     openLabel: 'เปิดรับ',
     icon: HouseLineIcon,
     Detail: ShelterPublicDetail,
     mapProp: 'shelters',
     searchHint: 'ค้นหาชื่อหรือที่อยู่',
-    meta: (p) => `ว่าง ${formatNumber(Math.max(p.capacity - p.current_occupancy, 0))} จาก ${formatNumber(p.capacity)} ที่`,
+    meta: (p) => {
+      const text = `ว่าง ${formatNumber(shelterFree(p))} จาก ${formatNumber(p.capacity)} ที่`;
+      return isNearFull(p) ? <><span className="font-semibold text-org-tx">ใกล้เต็ม</span> · {text}</> : text;
+    },
   },
   distribution: {
     path: '/distributions',
     title: 'จุดแจกจ่าย',
-    desc: 'จุดรับอาหาร น้ำดื่ม ยา และถุงยังชีพ',
     openStatus: 'active',
     openLabel: 'เปิดแจก',
     icon: PackageIcon,
     Detail: DistributionPublicDetail,
     mapProp: 'distributions',
     searchHint: 'ค้นหาชื่อ ที่อยู่ หรือของที่แจก',
-    meta: (p) => p.supply_types || p.address || '',
+    // เวลาเปิดขึ้นก่อน ป้าย "เปิดแจก" ตั้งโดยเจ้าหน้าที่ ไม่ได้ดูจากเวลา คนจะได้เห็นเองว่าตอนนี้ยังเปิดอยู่ไหม
+    meta: (p) => [openHours(p), p.supply_types || p.address].filter(Boolean).join(' · '),
   },
 };
 
@@ -46,8 +52,18 @@ const CONFIG = {
 export function PlaceList({ type }) {
   const cfg = CONFIG[type];
   const toast = useToast();
-  const { data, error, loading, refresh } = usePolling(cfg.path);
-  const [onlyOpen, setOnlyOpen] = useState(true);
+  const { data, error, loading, refresh, updatedAt } = usePolling(cfg.path);
+  // การ์ดลอย "เคสที่ฉันแจ้ง" แบบเดียวกับหน้าภาพรวม ให้เห็นสถานะเคสตัวเองได้ทุกหน้า
+  const { cases: myCases, isSample } = useVisibleMyCases(updatedAt?.getTime() ?? 0);
+  const latestCase = myCases[0];
+
+  // แถบข่าวสารชุดเดียวกับหน้าภาพรวม: ดึงเพิ่มเฉพาะข้อมูลอีกหมวดที่หน้านี้ยังไม่มี
+  const other = usePolling(type === 'shelter' ? '/distributions' : '/shelters');
+  const announcements = buildAnnouncements({
+    shelters: (type === 'shelter' ? data : other.data) || [],
+    distributions: (type === 'distribution' ? data : other.data) || [],
+    now: updatedAt?.getTime() ?? 0, // ใช้หาจุดแจกที่ใกล้ปิด
+  });
   const [query, setQuery] = useState('');
   const [me, setMe] = useState(null);
   const [locating, setLocating] = useState(false);
@@ -58,20 +74,28 @@ export function PlaceList({ type }) {
   const places = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = (data || [])
-      .filter((p) => !onlyOpen || p.status === cfg.openStatus)
       .filter((p) => !q || [p.name, p.address, p.supply_types].some((v) => v?.toLowerCase().includes(q)))
       .map((p) => ({ ...p, distance: distanceKm(me, p) }));
-    if (me) list.sort((a, b) => a.distance - b.distance);
+    // ที่เปิดอยู่ขึ้นก่อน ที่ปิดแล้วไปท้าย ในกลุ่มเดียวกันเรียงจากใกล้ที่สุด (ถ้ารู้ตำแหน่ง)
+    const isOpen = (p) => (p.status === cfg.openStatus ? 0 : 1);
+    list.sort((a, b) => isOpen(a) - isOpen(b) || (me ? a.distance - b.distance : 0));
     return list;
-  }, [data, onlyOpen, query, me, cfg.openStatus]);
+  }, [data, query, me, cfg.openStatus]);
 
   const selected = selectedId != null ? (data || []).find((p) => p.id === selectedId) : null;
   const Icon = cfg.icon;
   const Detail = cfg.Detail;
 
+  // ความสูงของแผ่นข้อมูลที่บังแผนที่ ใช้วางจุดที่เลือกไว้กลางพื้นที่ที่ยังมองเห็น
+  const sheetRef = useRef(null);
+  const coverBottom = () => sheetRef.current?.offsetHeight ?? 0;
+  // ความสูงที่แถบข่าวสารบังด้านบน
+  const topRef = useRef(null);
+  const coverTop = () => topRef.current?.offsetHeight ?? 0;
+
   function choose(p) {
     setSelectedId(p.id);
-    setFocus({ lat: p.lat, lng: p.lng });
+    setFocus({ lat: p.lat, lng: p.lng, coverBottom, coverTop });
     setCollapsed(false);
   }
 
@@ -86,7 +110,7 @@ export function PlaceList({ type }) {
         setLocating(false);
         const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setMe(p);
-        setFocus({ ...p, zoom: 15 });
+        setFocus({ ...p, zoom: 15, coverBottom, coverTop });
       },
       () => {
         setLocating(false);
@@ -104,22 +128,51 @@ export function PlaceList({ type }) {
           {...{ [cfg.mapProp]: places }}
           selected={selectedId != null ? { type, id: selectedId } : null}
           onSelect={(_, p) => choose(p)}
+          onMapClick={() => setCollapsed(true)}
           focus={focus}
           me={me}
           locate={false}
         />
       </div>
 
+      {/* บนสุดของแผนที่: แถบข่าวสารจากศูนย์ แบบเดียวกับหน้าภาพรวม */}
+      <div ref={topRef} className="pointer-events-none absolute inset-x-0 top-0 z-[500] pt-3">
+        <NewsTicker items={announcements} updatedAt={updatedAt} loading={loading || other.loading} className="px-3" />
+      </div>
+
       <MapSheet
+        ref={sheetRef}
         label={cfg.title}
+        // รายการเปิดมาเตี้ยเท่าหน้าภาพรวม ให้เห็นแผนที่มาก ลากขึ้น/เลื่อนรายการเพื่อดูต่อจนเต็มสูง
+        // เปิดรายละเอียดสถานที่ → กลับเป็นครึ่งจอเดิม ให้เห็นเวลาเปิด ปุ่มโทร ปุ่มนำทางครบ
+        peek={!selected}
+        // ดูรายละเอียดจุดแบบเต็มสูง → ซ่อนปุ่มลอยไม่ให้บังหมุด | รายการเต็มสูงยังเห็นปุ่ม ◎ ไว้เรียงจากใกล้สุด
+        hideToolbarWhenFull={!!selected}
         collapsed={collapsed}
         onToggle={() => setCollapsed((c) => !c)}
         toolbar={
           <>
-            <span />
-            <IconButton label="ไปยังตำแหน่งของฉัน" tone="float" onClick={locateMe} disabled={locating}>
-              {locating ? <CircleNotchIcon size={22} className="animate-spin" aria-hidden /> : <CrosshairIcon size={22} aria-hidden />}
-            </IconButton>
+            {latestCase ? (
+              // เคสตัวอย่างไม่มีหน้าติดตาม → พาไปหน้าภาพรวมที่ปักหมุดเคสไว้
+              <MyCaseCard data={latestCase} more={myCases.length - 1} href={isSample ? '/' : `/track?case=${latestCase.case_no}`} />
+            ) : (
+              <span />
+            )}
+            {/* แบบเดียวกับหน้าภาพรวม: บน = ◎ (ขาว → ฟ้าเมื่อแสดงตำแหน่งของฉันแล้ว)  ล่าง = ปุ่มโทรฉุกเฉิน
+                อยู่กึ่งกลางแนวตั้งกับการ์ด */}
+            <div className="flex shrink-0 flex-col items-center gap-2">
+              <IconButton
+                label="ไปยังตำแหน่งของฉัน"
+                tone={me ? 'accent' : 'float'}
+                aria-pressed={!!me}
+                size={40}
+                onClick={locateMe}
+                disabled={locating}
+              >
+                {locating ? <CircleNotchIcon size={20} className="animate-spin" aria-hidden /> : <CrosshairIcon size={20} aria-hidden />}
+              </IconButton>
+              <HotlineFab />
+            </div>
           </>
         }
         summary={
@@ -128,9 +181,8 @@ export function PlaceList({ type }) {
             <span className="text-md text-t2 tabular-nums">{places.length} แห่ง</span>
           </p>
         }
-      >
-        {selected ? (
-          <>
+        header={
+          selected ? (
             <button
               type="button"
               onClick={() => setSelectedId(null)}
@@ -139,17 +191,22 @@ export function PlaceList({ type }) {
               <CaretLeftIcon size={18} weight="bold" aria-hidden />
               รายการทั้งหมด
             </button>
-            <Detail place={selected} distance={distanceKm(me, selected)} />
-          </>
-        ) : (
-          <>
+          ) : (
             <div className="flex flex-col gap-0.5">
               <h1 className="text-5xl font-semibold short:text-3xl">{cfg.title}</h1>
-              <p className="font-body text-sm text-t3">
-                {me ? 'เรียงจากใกล้ที่สุด' : `${cfg.desc} · กดปุ่มตำแหน่งเพื่อเรียงตามระยะทาง`}
+              <p className="flex items-center gap-1 truncate font-body text-sm text-t3">
+                {me ? 'เรียงจากใกล้ที่สุด' : (
+                  <>กดปุ่ม <CrosshairIcon size={14} className="shrink-0" aria-label="ตำแหน่งของฉัน" role="img" /> เพื่อเรียงจากใกล้ที่สุด</>
+                )}
               </p>
             </div>
-
+          )
+        }
+      >
+        {selected ? (
+          <Detail place={selected} distance={distanceKm(me, selected)} />
+        ) : (
+          <>
             <SearchField
               label={`ค้นหา${cfg.title}`}
               value={query}
@@ -157,15 +214,6 @@ export function PlaceList({ type }) {
               placeholder={cfg.searchHint}
               icon={<MagnifyingGlassIcon size={18} className="text-t3" aria-hidden />}
             />
-
-            <ChipRow label="ตัวกรอง">
-              <Chip selected={onlyOpen} onClick={() => setOnlyOpen(true)}>
-                เฉพาะที่{cfg.openLabel}
-              </Chip>
-              <Chip selected={!onlyOpen} onClick={() => setOnlyOpen(false)}>
-                ทั้งหมด
-              </Chip>
-            </ChipRow>
 
             {error && (
               <p role="alert" className="flex items-start gap-2 text-md text-red-tx">

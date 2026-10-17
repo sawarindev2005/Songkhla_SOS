@@ -101,14 +101,31 @@ const PUBLIC_PINS = {
   },
 };
 
+// focus.coverBottom / coverTop (ไม่บังคับ) = ฟังก์ชันคืนความสูง px ที่ถูกบังด้านล่าง (เช่น bottom sheet) / ด้านบน
+// (เช่น แถบข่าว + แถวชิป) → วางจุดไว้กลางพื้นที่ที่ยังมองเห็น แทนกลางแผนที่ทั้งแผ่น
+const FOCUS_TOP = 48; // ไม่ส่ง coverTop มา → เว้นแถบชิปด้านบนแถวเดียว
+const FOCUS_MIN_VISIBLE = 80;
+
 function FlyTo({ focus }) {
   const map = useMap();
   const lat = focus?.lat;
   const lng = focus?.lng;
   const zoom = focus?.zoom;
+  const coverBottom = focus?.coverBottom;
+  const coverTop = focus?.coverTop;
   useEffect(() => {
-    if (lat != null && lng != null) map.flyTo([lat, lng], zoom || Math.max(map.getZoom(), 15), { duration: 0.6 });
-  }, [lat, lng, zoom, map]);
+    if (lat == null || lng == null) return;
+    const z = zoom || Math.max(map.getZoom(), 15);
+    let target = L.latLng(lat, lng);
+    if (coverBottom || coverTop) {
+      const h = map.getSize().y;
+      const top = coverTop ? coverTop() : FOCUS_TOP;
+      const bottom = Math.min(coverBottom ? coverBottom() : 0, h - top - FOCUS_MIN_VISIBLE);
+      const shift = (bottom - top) / 2;
+      if (shift !== 0) target = map.unproject(map.project(target, z).add([0, shift]), z);
+    }
+    map.flyTo(target, z, { duration: 0.6 });
+  }, [lat, lng, zoom, coverBottom, coverTop, map]);
   return null;
 }
 
@@ -120,6 +137,23 @@ function AutoResize() {
     observer.observe(map.getContainer());
     return () => observer.disconnect();
   }, [map]);
+  return null;
+}
+
+// แตะแผนที่ (เริ่มกด ลาก หรือซูม) → เรียก onPress ทันที ไม่รอให้ปล่อยนิ้ว
+// ยกเว้นกดบนหมุด / ป้าย / ปุ่มควบคุม ซึ่งมีงานของตัวเอง (เช่น หมุด → เปิดรายละเอียด)
+const PRESS_IGNORE = '.leaflet-marker-icon, .leaflet-tooltip, .leaflet-popup, .leaflet-control';
+
+function MapPress({ onPress }) {
+  const map = useMap();
+  useEffect(() => {
+    const el = map.getContainer();
+    const handle = (e) => {
+      if (!e.target.closest(PRESS_IGNORE)) onPress();
+    };
+    el.addEventListener('pointerdown', handle);
+    return () => el.removeEventListener('pointerdown', handle);
+  }, [map, onPress]);
   return null;
 }
 
@@ -210,10 +244,12 @@ export default function MapViewInner({
   shelters = [],
   distributions = [],
   rescuers = [],
+  mine = [], // id เคสที่ผู้ใช้แจ้งเอง → แยกออกจากกลุ่ม หมุดใหญ่ + ป้าย "เคสของฉัน"
   show = {},
   me,
   selected,
   onSelect,
+  onMapClick, // แตะแผนที่ทุกแบบ (กด ลาก ซูม) ไม่รวมหมุด/ป้าย/ปุ่ม เรียกทันทีตอนเริ่มกด
   picker,
   focus,
   locate = true,
@@ -240,6 +276,7 @@ export default function MapViewInner({
       {zoomControl && <ZoomControl position="topright" />}
       <AutoResize />
       <FlyTo focus={focus} />
+      {onMapClick && <MapPress onPress={onMapClick} />}
 
       {visible.shelters &&
         shelters.map((s) => (
@@ -289,7 +326,7 @@ export default function MapViewInner({
           showCoverageOnHover={false}
           iconCreateFunction={pins.cluster}
         >
-          {requests.map((r) => (
+          {requests.filter((r) => !mine.includes(r.id)).map((r) => (
             <Marker
               key={`q-${r.id}`}
               position={[r.lat, r.lng]}
@@ -301,6 +338,22 @@ export default function MapViewInner({
           ))}
         </MarkerClusterGroup>
       )}
+
+      {/* เคสของฉัน แสดงเสมอแม้ปิดชั้น "ขอช่วย" */}
+      {requests.filter((r) => mine.includes(r.id)).map((r) => (
+        <Marker
+          key={`mine-${r.id}`}
+          position={[r.lat, r.lng]}
+          icon={pins.request(r, true)}
+          eventHandlers={select('request', r)}
+          zIndexOffset={900}
+          title={`เคสของฉัน ${r.case_no}`}
+        >
+          <Tooltip direction="top" offset={[0, -18]} permanent>
+            เคสของฉัน
+          </Tooltip>
+        </Marker>
+      ))}
 
       {me?.lat != null && (
         <Marker

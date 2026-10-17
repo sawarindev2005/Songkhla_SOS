@@ -6,12 +6,13 @@ import { api } from '@/lib/api';
 import { URGENCY, VULNERABLE, addMyCase } from '@/lib/format';
 import { Button } from '@/components/pk/Button';
 import { Checkbox } from '@/components/pk/Checkbox';
+import { ConfirmDialog } from '@/components/pk/ConfirmDialog';
 import { FallbackBlock } from '@/components/pk/FallbackBlock';
 import { RadioCards } from '@/components/pk/RadioCards';
 import { Stepper } from '@/components/pk/Stepper';
 import { TextField } from '@/components/pk/TextField';
 import { useToast } from '@/components/pk/Toast';
-import { isUrgent, UrgencyIcon } from '@/components/pk/domain';
+import { URGENCY_TEXT, UrgencyIcon } from '@/components/pk/domain';
 import { CheckCircleIcon, CopyIcon, CrosshairIcon, SirenIcon, WarningIcon } from '@/components/pk/icons';
 import { cn } from '@/components/pk/cn';
 
@@ -58,6 +59,7 @@ export default function RequestPage() {
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [locating, setLocating] = useState(false);
   const [result, setResult] = useState(null);
 
@@ -96,8 +98,10 @@ export default function RequestPage() {
     );
   }
 
-  async function submit(e) {
+  // ตรวจข้อมูลก่อน ถ้าครบให้เปิดกล่องยืนยัน ยังไม่ส่งจริง
+  function submit(e) {
     e.preventDefault();
+    if (submitting) return;
     const errs = validate(form, position);
     setErrors(errs);
     if (Object.keys(errs).length) {
@@ -106,6 +110,11 @@ export default function RequestPage() {
         ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
+    setConfirming(true);
+  }
+
+  async function send() {
+    setConfirming(false);
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -186,7 +195,7 @@ export default function RequestPage() {
               <UrgencyIcon
                 urgency={key}
                 size={22}
-                className={cn('shrink-0', isUrgent(key) ? 'text-red' : key === 'low' ? 'text-t3' : 'text-amb')}
+                className={cn('shrink-0', URGENCY_TEXT[key])}
               />
             ),
           }))}
@@ -287,6 +296,47 @@ export default function RequestPage() {
         </a>{' '}
         ทันที
       </p>
+
+      <ConfirmDialog
+        open={confirming}
+        title="ยืนยันส่งคำขอความช่วยเหลือ?"
+        confirmLabel="ยืนยัน ส่งคำขอ"
+        cancelLabel="กลับไปแก้ไข"
+        confirmVariant="danger"
+        confirmIcon={<SirenIcon size={20} weight="fill" aria-hidden />}
+        onConfirm={send}
+        onCancel={() => setConfirming(false)}
+      >
+        <p className="mb-3">ตรวจสอบข้อมูลก่อนส่ง ทีมกู้ภัยจะโทรกลับตามเบอร์นี้</p>
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 rounded-lg border border-line p-3 text-ink">
+          <dt className="text-t2">ความเร่งด่วน</dt>
+          <dd className="font-medium">{URGENCY[form.urgency]?.label}</dd>
+          <dt className="text-t2">ชื่อ</dt>
+          <dd className="font-medium break-words">{form.requester_name}</dd>
+          <dt className="text-t2">เบอร์โทร</dt>
+          <dd className="font-medium tabular-nums">{form.phone}</dd>
+          <dt className="text-t2">จำนวนคน</dt>
+          <dd className="font-medium">{form.people_count} คน</dd>
+          {VULNERABLE.some((v) => form[v.key]) && (
+            <>
+              <dt className="text-t2">กลุ่มเปราะบาง</dt>
+              <dd className="font-medium">
+                {VULNERABLE.filter((v) => form[v.key])
+                  .map((v) => v.label)
+                  .join(', ')}
+              </dd>
+            </>
+          )}
+          {position && (
+            <>
+              <dt className="text-t2">พิกัด</dt>
+              <dd className="font-medium tabular-nums">
+                {position.lat.toFixed(5)}, {position.lng.toFixed(5)}
+              </dd>
+            </>
+          )}
+        </dl>
+      </ConfirmDialog>
     </form>
   );
 }

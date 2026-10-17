@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { BabyIcon, MapPinIcon, UsersIcon, WheelchairIcon } from './icons';
 import { formatDistance, STATUS, URGENCY } from '@/lib/format';
-import { isUrgent, UrgencyIcon, formatWait, waitMinutes } from './domain';
+import { URGENCY_TEXT, UrgencyIcon, formatWait, waitMinutes } from './domain';
 import { cn } from './cn';
 
 const ROW = 'flex w-full items-start gap-3 border-b border-line bg-white px-1 py-3 text-left text-ink no-underline last:border-b-0 hover:bg-s1 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-acc short:py-2.25';
@@ -14,7 +14,7 @@ export function CaseCard({ request: r, distance, href, onSelect }) {
   const VulIcon = r.has_children ? BabyIcon : WheelchairIcon;
   const body = (
     <>
-      <UrgencyIcon urgency={r.urgency} className={cn('mt-0.5 shrink-0', isUrgent(r.urgency) ? 'text-red' : r.urgency === 'low' ? 'text-t3' : 'text-amb')} />
+      <UrgencyIcon urgency={r.urgency} className={cn('mt-0.5 shrink-0', URGENCY_TEXT[r.urgency] || URGENCY_TEXT.medium)} />
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="flex items-baseline gap-3">
           <span className="min-w-0 flex-1 truncate text-md font-bold">

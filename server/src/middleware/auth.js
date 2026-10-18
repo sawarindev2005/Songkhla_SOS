@@ -1,5 +1,9 @@
 const jwt = require('jsonwebtoken');
 
+const COOKIE_NAME = 'hy_token';
+const COOKIE_PATH = '/api';
+const COOKIE_MAX_AGE = 12 * 60 * 60 * 1000; // 12 ชม. ให้ตรงกับ JWT_EXPIRES_IN ค่าเริ่มต้น
+
 function signToken(user) {
   return jwt.sign(
     { id: user.id, role: user.role, name: user.full_name },
@@ -8,10 +12,30 @@ function signToken(user) {
   );
 }
 
-// ตรวจ Bearer token แล้วแนบ req.user = { id, role, name }
+// HttpOnly: JavaScript อ่าน token ไม่ได้ (กัน XSS ขโมย token)
+// SameSite=Lax: ไม่ส่งคุกกี้กับ POST/PATCH/DELETE ที่มาจากเว็บอื่น (กัน CSRF)
+function cookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: COOKIE_PATH,
+    maxAge: COOKIE_MAX_AGE,
+  };
+}
+
+function setAuthCookie(res, user) {
+  res.cookie(COOKIE_NAME, signToken(user), cookieOptions());
+}
+
+function clearAuthCookie(res) {
+  const { maxAge, ...options } = cookieOptions();
+  res.clearCookie(COOKIE_NAME, options);
+}
+
+// ตรวจ token จากคุกกี้ hy_token แล้วแนบ req.user = { id, role, name }
 function verifyToken(req, res, next) {
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  const token = req.cookies?.[COOKIE_NAME];
   if (!token) return res.status(401).json({ message: 'กรุณาเข้าสู่ระบบ' });
 
   try {
@@ -32,4 +56,4 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { signToken, verifyToken, requireRole };
+module.exports = { signToken, setAuthCookie, clearAuthCookie, verifyToken, requireRole };

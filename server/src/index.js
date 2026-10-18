@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const pool = require('./db');
 
 if (!process.env.JWT_SECRET) {
@@ -9,8 +10,10 @@ if (!process.env.JWT_SECRET) {
 }
 
 const app = express();
-app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:3000' }));
+// credentials: true ให้ browser ส่ง/รับคุกกี้ token ข้าม origin ได้
+app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:3000', credentials: true }));
 app.use(express.json());
+app.use(cookieParser());
 
 app.get('/api/health', async (req, res) => {
   await pool.query('SELECT 1');

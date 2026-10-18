@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const pool = require('../db');
-const { signToken, verifyToken } = require('../middleware/auth');
+const { setAuthCookie, clearAuthCookie, verifyToken } = require('../middleware/auth');
 
 const PUBLIC_FIELDS = 'id, username, full_name, phone, role, team_name, current_lat, current_lng, location_updated_at';
 
@@ -21,7 +21,15 @@ router.post('/login', async (req, res) => {
   }
 
   const { password_hash, ...safeUser } = user;
-  res.json({ token: signToken(user), user: safeUser });
+  // token อยู่ในคุกกี้ HttpOnly เท่านั้น ไม่ส่งใน body ให้ JavaScript เห็น
+  setAuthCookie(res, user);
+  res.json({ user: safeUser });
+});
+
+// JavaScript ลบคุกกี้ HttpOnly เองไม่ได้ ต้องให้ server สั่งลบ
+router.post('/logout', (req, res) => {
+  clearAuthCookie(res);
+  res.status(204).end();
 });
 
 router.get('/me', verifyToken, async (req, res) => {

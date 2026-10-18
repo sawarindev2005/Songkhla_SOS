@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, clearSession, getStoredUser, getToken, saveSession } from './api';
+import { api } from './api';
 
 export const ROLE_HOME = {
   rescuer: '/rescuer',
@@ -23,33 +23,35 @@ export function AuthProvider({ children }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    // อ่าน session จาก localStorage หลัง mount (ไม่มีบน server)
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- session อยู่ใน localStorage อ่านได้หลัง mount เท่านั้น
-    setUser(getToken() ? getStoredUser() : null);
-    setReady(true);
+    // token อยู่ในคุกกี้ HttpOnly ที่ JavaScript อ่านไม่ได้ จึงถาม server ว่ายังล็อกอินอยู่ไหม
+    let cancelled = false;
+    api('/auth/me', { redirectOn401: false })
+      .then((me) => !cancelled && setUser(me))
+      .catch(() => !cancelled && setUser(null))
+      .finally(() => !cancelled && setReady(true));
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const login = useCallback(async (username, password) => {
-    const { token, user } = await api('/auth/login', {
+    const { user } = await api('/auth/login', {
       method: 'POST',
       body: { username, password },
+      redirectOn401: false,
     });
-    saveSession(token, user);
     setUser(user);
     return user;
   }, []);
 
-  const logout = useCallback(() => {
-    clearSession();
+  const logout = useCallback(async () => {
     setUser(null);
+    // ให้ server ลบคุกกี้ (JavaScript ลบคุกกี้ HttpOnly เองไม่ได้)
+    await api('/auth/logout', { method: 'POST', redirectOn401: false }).catch(() => {});
   }, []);
 
   const updateUser = useCallback((patch) => {
-    setUser((prev) => {
-      const next = { ...prev, ...patch };
-      saveSession(getToken(), next);
-      return next;
-    });
+    setUser((prev) => ({ ...prev, ...patch }));
   }, []);
 
   return (

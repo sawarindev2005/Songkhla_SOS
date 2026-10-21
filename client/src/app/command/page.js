@@ -1,7 +1,5 @@
 'use client';
 
-import Link from 'next/link';
-import { Route } from 'lucide-react';
 import { PageHeader } from '@/components/StaffShell';
 import {
   BarList,
@@ -14,7 +12,10 @@ import {
   statusRows,
   urgencyRows,
 } from '@/components/Dashboard';
-import { Button, ErrorBanner, Spinner } from '@/components/ui';
+import { Button } from '@/components/pk/Button';
+import { ErrorBanner } from '@/components/pk/ErrorBanner';
+import { Spinner } from '@/components/pk/Spinner';
+import { PathIcon } from '@/components/pk/icons';
 import { usePolling } from '@/hooks/usePolling';
 import { formatTime } from '@/lib/format';
 
@@ -27,8 +28,7 @@ export default function CommandDashboard() {
         title="Dashboard ศูนย์บัญชาการ"
         desc={`สรุปสถานการณ์ อ.หาดใหญ่ · อัปเดต ${formatTime(updatedAt)}`}
         actions={
-          <Button as={Link} href="/command/assign">
-            <Route className="size-4" aria-hidden />
+          <Button href="/command/assign" size="sm" block={false} icon={<PathIcon size={18} weight="bold" aria-hidden />}>
             มอบหมายเคส ({s?.pending ?? 0} รอ)
           </Button>
         }

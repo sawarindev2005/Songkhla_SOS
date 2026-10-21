@@ -12,6 +12,7 @@ export function ConfirmDialog({
   cancelLabel = 'ยกเลิก',
   confirmVariant = 'primary',
   confirmIcon,
+  loading = false,
   onConfirm,
   onCancel,
 }) {
@@ -41,7 +42,7 @@ export function ConfirmDialog({
           </h2>
           <div className="font-body text-md text-t2">{children}</div>
           <div className="flex flex-col gap-2">
-            <Button variant={confirmVariant} icon={confirmIcon} onClick={onConfirm} autoFocus>
+            <Button variant={confirmVariant} icon={confirmIcon} loading={loading} onClick={onConfirm} autoFocus>
               {confirmLabel}
             </Button>
             <Button variant="outline" onClick={onCancel}>

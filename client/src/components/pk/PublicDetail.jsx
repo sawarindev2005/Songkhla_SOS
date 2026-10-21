@@ -23,7 +23,8 @@ function Header({ title, children }) {
   );
 }
 
-function Actions({ lat, lng, phone }) {
+export function PlaceActions({ place }) {
+  const { lat, lng, contact_phone: phone } = place;
   return (
     <div className="flex gap-2">
       {phone && (
@@ -102,7 +103,6 @@ export function ShelterPublicDetail({ place: s, distance }) {
       {s.address && <Row icon={MapPinIcon}>{s.address}</Row>}
       {s.facilities && <Row icon={PackageIcon}>{s.facilities}</Row>}
       <UpdatedRow at={s.updated_at} phone={s.contact_phone} />
-      <Actions lat={s.lat} lng={s.lng} phone={s.contact_phone} />
     </div>
   );
 }
@@ -125,7 +125,6 @@ export function DistributionPublicDetail({ place: d, distance }) {
       {hours && <Row icon={ClockIcon}>เปิดแจก {hours}</Row>}
       {d.address && <Row icon={MapPinIcon}>{d.address}</Row>}
       <UpdatedRow at={d.updated_at} phone={d.contact_phone} />
-      <Actions lat={d.lat} lng={d.lng} phone={d.contact_phone} />
     </div>
   );
 }

@@ -1,52 +1,16 @@
 @import "tailwindcss";
-@import "../styles/public-tokens.css";
-
-/* Design tokens — ui-ux-pro-max: Emergency SOS & Safety (#158) + Government/Public Service (#13) */
-@theme {
-  --font-sans: var(--font-thai), ui-sans-serif, system-ui, sans-serif;
-
-  --color-canvas: #f8fafc;
-  --color-surface: #ffffff;
-  --color-ink: #0f172a;
-  --color-muted: #475569;
-  --color-line: #e2e8f0;
-
-  /* ขอความช่วยเหลือ / วิกฤต */
-  --color-brand: #dc2626;
-  --color-brand-dark: #b91c1c;
-  --color-brand-soft: #fef2f2;
-
-  /* กู้ภัย / ข้อมูล */
-  --color-safety: #2563eb;
-  --color-safety-dark: #1d4ed8;
-  --color-safety-soft: #eff6ff;
-
-  /* ที่พักพิง */
-  --color-shelter: #15803d;
-  --color-shelter-soft: #f0fdf4;
-
-  /* จุดแจกจ่าย */
-  --color-supply: #c2410c;
-  --color-supply-soft: #fff7ed;
-
-  /* คำเตือน */
-  --color-warn: #a16207;
-  --color-warn-soft: #fefce8;
-  --color-warn-line: #fde68a;
-
-  --shadow-sheet: 0 -8px 24px -12px rgb(15 23 42 / 0.25);
-  --shadow-float: 0 4px 14px -4px rgb(15 23 42 / 0.25);
-}
+@import "../styles/tokens.css";
 
 html {
   -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  background: var(--color-canvas);
+  background: var(--color-s1);
   color: var(--color-ink);
-  font-family: var(--font-sans);
-  line-height: 1.55;
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  line-height: var(--text-base--line-height);
 }
 
 button,
@@ -56,76 +20,26 @@ a,
 }
 
 :focus-visible {
-  outline: 3px solid var(--color-safety);
+  outline: 3px solid var(--color-acc);
   outline-offset: 2px;
-}
-
-.tabular {
-  font-variant-numeric: tabular-nums;
 }
 
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-.no-scrollbar {
-  scrollbar-width: none;
-}
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-
 /* ---------- Leaflet ---------- */
 .leaflet-container {
-  font-family: var(--font-sans);
-  background: #e5eef5;
+  font-family: inherit;
+  background: var(--color-map);
 }
 
-.map-pin {
+/* หมุดใช้ divIcon เปล่า ให้ชิ้นใน components/pk/pins จัดหน้าตาเอง */
+.pk-pin {
   background: none;
   border: none;
-}
-
-.map-pin > div {
   display: grid;
   place-items: center;
-  border-radius: 9999px;
-  color: #fff;
-  border: 2px solid #fff;
-  box-shadow: 0 2px 6px rgb(15 23 42 / 0.35);
-  transition: transform 150ms ease-out;
-}
-
-.map-pin.is-selected > div {
-  transform: scale(1.25);
-  box-shadow: 0 0 0 4px rgb(37 99 235 / 0.35), 0 2px 6px rgb(15 23 42 / 0.35);
-}
-
-.map-cluster {
-  background: none;
-  border: none;
-}
-
-.map-cluster > div {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 9999px;
-  background: #0f172a;
-  color: #fff;
-  font-weight: 700;
-  font-size: 15px;
-  box-shadow: 0 0 0 6px rgb(220 38 38 / 0.35), 0 0 0 10px rgb(220 38 38 / 0.15);
-}
-
-.me-dot {
-  width: 18px;
-  height: 18px;
-  border-radius: 9999px;
-  background: #2563eb;
-  border: 3px solid #fff;
-  box-shadow: 0 0 0 6px rgb(37 99 235 / 0.25);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -140,4 +54,10 @@ a,
 /* ความสูงหน้าจอที่เหลือเหนือ bottom nav (4rem) */
 .screen-h {
   height: calc(100dvh - 4rem - env(safe-area-inset-bottom));
+}
+/* ซ่อนแถบเลื่อนบนมือถือตามที่ผู้ใช้ต้องการ แต่ยังเลื่อนได้ตามปกติ */
+@media (max-width: 1023px) {
+  /* !important + :root ชนะสไตล์ที่ส่วนขยายจำลองมือถือฉีดเข้ามา (scrollbar-width: thin !important) */
+  :root, :root * { scrollbar-width: none !important; }
+  :root ::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
 }

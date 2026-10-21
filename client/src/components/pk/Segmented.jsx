@@ -27,7 +27,7 @@ export function Segmented({ label, options, value, onChange }) {
             tabIndex={on ? 0 : -1}
             onClick={() => onChange(o.value)}
             className={cn(
-              'flex flex-1 items-center justify-center gap-1.5 rounded-sm px-1 py-1.75 text-center text-sm',
+              'flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-sm px-1 py-1.75 text-center text-sm',
               on ? 'bg-white font-semibold text-ink shadow-seg' : 'font-medium text-t2',
             )}
           >

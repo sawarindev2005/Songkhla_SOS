@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic';
 export const MapView = dynamic(() => import('./MapViewInner'), {
   ssr: false,
   loading: () => (
-    <div className="grid h-full w-full place-items-center bg-slate-100 text-sm text-muted">
+    <div className="grid h-full w-full place-items-center bg-map text-base text-t3">
       กำลังโหลดแผนที่…
     </div>
   ),

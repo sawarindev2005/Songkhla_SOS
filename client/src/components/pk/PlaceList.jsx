@@ -10,7 +10,7 @@ import { CaretLeftIcon, CircleNotchIcon, CrosshairIcon, HouseLineIcon, Magnifyin
 import { PlaceRow } from './CaseCard';
 import { EmptyState } from './EmptyState';
 import { IconButton } from './IconButton';
-import { MapSheet, mapArea, isWide } from './MapSheet';
+import { MapSheet, mapArea, isWide, useSheetCollapsed } from './MapSheet';
 import { MyCaseCard } from './MyCaseCard';
 import { NewsTicker } from './NewsTicker';
 import { HotlineFab } from './HotlineFab';
@@ -69,7 +69,7 @@ export function PlaceList({ type }) {
   const [locating, setLocating] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [focus, setFocus] = useState(null);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useSheetCollapsed();
 
   const places = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -149,7 +149,7 @@ export function PlaceList({ type }) {
         // ดูรายละเอียดจุดแบบเต็มสูง → ซ่อนปุ่มลอยไม่ให้บังหมุด | รายการเต็มสูงยังเห็นปุ่ม ◎ ไว้เรียงจากใกล้สุด
         hideToolbarWhenFull={!!selected}
         collapsed={collapsed}
-        onToggle={() => setCollapsed((c) => !c)}
+        onToggle={() => setCollapsed(!collapsed)}
         toolbar={
           <>
             {latestCase ? (

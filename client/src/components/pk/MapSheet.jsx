@@ -1,6 +1,5 @@
 'use client';
 import { useEffect, useId, useRef, useState } from 'react';
-import { CaretLeftIcon, CaretRightIcon } from './icons';
 import { cn } from './cn';
 
 // ตั้งแต่ md (แท็บเล็ตขึ้นไป) แผ่นข้อมูลเปลี่ยนจาก bottom sheet เป็นแผงด้านซ้ายความสูงเต็ม
@@ -21,6 +20,13 @@ function useWide() {
   return wide;
 }
 
+// สถานะย่อแผ่น: มือถือเริ่มแบบขยาย | md+ เริ่มแบบย่อ (เห็นแผนที่เต็มกว้าง) จนกว่าผู้ใช้จะกดเปิด/ปิดเอง
+export function useSheetCollapsed() {
+  const wide = useWide();
+  const [chosen, setChosen] = useState(null);
+  return [chosen ?? wide, setChosen];
+}
+
 // ระยะลาก (px) ที่ต้องเกินก่อนจะย่อ/ขยายแผ่น ถ้าน้อยกว่านี้จะเด้งกลับที่เดิม
 const DRAG_THRESHOLD = 48;
 // ความสูงแผ่นตอนครึ่งจอแบบ peek = เท่ากับแผ่นหน้าภาพรวม (ที่จับ + หัวข้อ + ตัวเลข 3 ช่อง) วัดจากจอจริง
@@ -35,17 +41,15 @@ const PEEK_HEIGHT = 'max-md:h-[167px] max-md:short:h-[156px]';
  * expandable = false → มีแค่ ย่อ / ครึ่งจอ ลากขึ้นหรือเลื่อนแล้วไม่ขยายเต็มสูง
  * hideToolbarWhenFull = ซ่อนปุ่มลอยตอนขยายเต็มสูง (เช่น ตอนดูรายละเอียดจุด ไม่ให้บังหมุดที่เลือก)
  * onFullChange(full) = แจ้งเมื่อแผ่นเข้า/ออกจากเต็มสูง (รวมตอนย่อแผ่น) เช่น ใช้ย่อรายการกลับตอนลากแผ่นลง
- * md+ = แผงข้างซ้ายเต็มสูง ไม่มีครึ่งจอ/เต็มสูง  collapsed = ซ่อนแผง เปิด/ปิดด้วยปุ่มแท็บที่ขอบแผง
+ * md+ = แผงข้างซ้ายเต็มสูง ไม่มีครึ่งจอ/เต็มสูง/การลาก  กดที่จับ = ย่อเป็นการ์ดสรุปมุมซ้ายล่าง (แผนที่เต็มกว้าง)
  */
 export function MapSheet({
   ref, children, header, summary, collapsed: collapsedProp = false, onToggle: onToggleProp, toolbar, className, label,
   peek = false, expandable = true, hideToolbarWhenFull = false, onFullChange,
 }) {
   const wide = useWide();
-  // collapsed = ย่อเป็นแถวสรุป (มือถือ) | sideClosed = ซ่อนแผงข้าง (md+) ไม่ลาก ใช้ปุ่มแท็บแทน
-  const collapsed = collapsedProp && !wide;
-  const sideClosed = collapsedProp && wide;
-  const onToggle = wide ? undefined : onToggleProp;
+  const collapsed = collapsedProp;
+  const onToggle = onToggleProp;
   const dragged = useRef(false); // กันไม่ให้ click หลังลากเสร็จ toggle ซ้ำ
   const [offset, setOffset] = useState(0);
   const [scrolled, setScrolled] = useState(false);
@@ -69,7 +73,7 @@ export function MapSheet({
   // ลากได้ทั้งหัวแผ่น (ที่จับ + header) เริ่มกดแล้วติดตามการขยับทั้งหน้าต่าง นิ้วหลุดออกนอกหัวแผ่นก็ยังลากต่อได้
   // ไม่จับ pointer ไว้กับหัวแผ่น ปุ่มในหัว (เช่น "กลับ") จึงยังกดได้ตามปกติ
   function handlePointerDown(e) {
-    if (!onToggle || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    if (wide || !onToggle || (e.pointerType === 'mouse' && e.button !== 0)) return;
     const startY = e.clientY;
     let moved = false;
     dragged.current = false;
@@ -143,24 +147,24 @@ export function MapSheet({
       <section
         aria-label={label}
         className={cn(
-          'pointer-events-auto flex min-h-0 flex-col rounded-t-3xl bg-white shadow-sheet md:absolute md:inset-y-0 md:left-0 md:w-90 md:rounded-none md:border-r md:border-line md:shadow-none lg:w-100',
+          'pointer-events-auto flex min-h-0 flex-col rounded-t-3xl bg-white shadow-sheet md:absolute md:w-90 lg:w-100',
           peek && !full && !collapsed && PEEK_HEIGHT,
-          'md:transition-[translate,visibility] md:duration-200 md:ease-out motion-reduce:transition-none',
-          sideClosed && 'md:invisible md:-translate-x-full',
+          // md+ ขยาย = แผงข้างเต็มสูง | ย่อ = การ์ดสรุปลอยมุมซ้ายล่าง
+          collapsed ? 'md:bottom-4 md:left-4 md:rounded-2xl md:shadow-float' : 'md:inset-y-0 md:left-0 md:rounded-none md:border-r md:border-line md:shadow-none',
         )}
       >
         {/* หัวแผ่น (ที่จับ + header) อยู่กับที่ เลื่อนเฉพาะเนื้อหาด้านล่าง มีเส้นคั่นเมื่อเนื้อหาเลื่อนลอดหัว */}
         <div
           onPointerDown={handlePointerDown}
-          className={cn('flex shrink-0 touch-none flex-col gap-3.5 border-b px-4 pt-2 select-none md:px-5 md:pt-5 short:gap-2.5', scrolled && !collapsed ? 'border-line' : 'border-transparent')}
+          className={cn('flex shrink-0 touch-none flex-col gap-3.5 border-b px-4 pt-2 select-none md:px-5 short:gap-2.5', scrolled && !collapsed ? 'border-line' : 'border-transparent')}
         >
           <button
             type="button"
             onClick={handleClick}
             aria-expanded={!collapsed}
             aria-controls={bodyId}
-            aria-label={collapsed ? 'ขยายแผ่นข้อมูล' : expandable ? 'ย่อแผ่นข้อมูล (ลากขึ้นเพื่อขยายเต็มจอ)' : 'ย่อแผ่นข้อมูล'}
-            className="-mt-2 -mb-4.5 flex cursor-grab md:hidden touch-none justify-center pt-2 pb-3 active:cursor-grabbing"
+            aria-label={collapsed ? 'ขยายแผ่นข้อมูล' : expandable && !wide ? 'ย่อแผ่นข้อมูล (ลากขึ้นเพื่อขยายเต็มจอ)' : 'ย่อแผ่นข้อมูล'}
+            className="-mt-2 -mb-4.5 flex cursor-grab md:cursor-pointer touch-none justify-center pt-2 pb-3 active:cursor-grabbing"
           >
             <span aria-hidden className="h-1 w-9 rounded-full bg-line2" />
           </button>
@@ -183,24 +187,6 @@ export function MapSheet({
           {collapsed ? summary : children}
         </div>
       </section>
-      {/* md+: แท็บที่ขอบขวาของแผง เปิด/ปิดแผงข้าง ปิดแล้วแท็บอยู่ขอบซ้ายของจอ */}
-      {onToggleProp && (
-        <button
-          type="button"
-          onClick={onToggleProp}
-          aria-expanded={!sideClosed}
-          aria-controls={bodyId}
-          aria-label={sideClosed ? `แสดง${label ?? 'แผงข้อมูล'}` : `ซ่อน${label ?? 'แผงข้อมูล'}`}
-          title={sideClosed ? 'แสดงแผง' : 'ซ่อนแผง'}
-          className={cn(
-            'pointer-events-auto absolute top-1/2 hidden h-12 w-6 -translate-y-1/2 place-items-center rounded-r-lg border border-l-0 border-line bg-white text-t2 shadow-float hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acc md:grid',
-            'transition-[left] duration-200 ease-out motion-reduce:transition-none',
-            sideClosed ? 'left-0' : 'left-90 lg:left-100',
-          )}
-        >
-          {sideClosed ? <CaretRightIcon size={16} weight="bold" aria-hidden /> : <CaretLeftIcon size={16} weight="bold" aria-hidden />}
-        </button>
-      )}
     </div>
   );
 }

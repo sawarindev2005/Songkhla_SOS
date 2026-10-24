@@ -9,7 +9,7 @@ import { buildAnnouncements } from '@/lib/announcements';
 import { Chip, ChipRow } from '@/components/pk/Chip';
 import { HotlineFab } from '@/components/pk/HotlineFab';
 import { IconButton } from '@/components/pk/IconButton';
-import { MapSheet, mapArea, isWide } from '@/components/pk/MapSheet';
+import { MapSheet, mapArea, isWide, useSheetCollapsed } from '@/components/pk/MapSheet';
 import { MyCaseCard } from '@/components/pk/MyCaseCard';
 import { NewsTicker } from '@/components/pk/NewsTicker';
 import { DistributionPublicDetail, RequestPublicDetail, ShelterPublicDetail } from '@/components/pk/PublicDetail';
@@ -69,7 +69,7 @@ export default function HomePage() {
   const [focus, setFocus] = useState(null);
   const [me, setMe] = useState(null);
   const [locating, setLocating] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useSheetCollapsed();
 
   const { cases: myCases, isSample } = useVisibleMyCases(stats.updatedAt?.getTime() ?? 0);
   // เคสที่ยังไม่จบทั้งหมด (รวมเคสของฉัน)
@@ -247,7 +247,7 @@ export default function HomePage() {
         // ลากแผ่นลงจากเต็มสูง หรือย่อแผ่น → รายการคำขอกลับเป็น 3 เคส
         onFullChange={(f) => !f && setShowAllCases(false)}
         collapsed={collapsed}
-        onToggle={() => setCollapsed((c) => !c)}
+        onToggle={() => setCollapsed(!collapsed)}
         toolbar={toolbar}
         summary={
           <p className="flex items-baseline justify-between gap-3 pb-1">

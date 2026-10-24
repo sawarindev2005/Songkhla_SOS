@@ -21,7 +21,7 @@ export function TextField({ label, prefix, hint, error, className, id, multiline
           id={fid}
           aria-invalid={error ? true : undefined}
           aria-describedby={note ? `${fid}-note` : undefined}
-          className={cn('min-w-0 flex-1 bg-transparent font-medium text-ink outline-none placeholder:text-t4', multiline ? 'resize-none font-body text-lg' : 'text-xl')}
+          className={cn('min-w-0 flex-1 bg-transparent font-medium text-ink outline-none placeholder:text-t3', multiline ? 'resize-none font-body text-lg' : 'text-xl')}
           {...input}
         />
       </div>
@@ -36,7 +36,7 @@ export function SearchField({ label, value, onChange, placeholder, icon }) {
       {icon}
       <input type="search" aria-label={label} value={value} placeholder={placeholder}
         onChange={e => onChange(e.target.value)}
-        className="min-w-0 flex-1 bg-transparent text-base text-ink outline-none placeholder:text-t4" />
+        className="min-w-0 flex-1 bg-transparent text-base text-ink outline-none placeholder:text-t3" />
     </label>
   );
 }

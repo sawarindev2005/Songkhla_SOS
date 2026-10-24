@@ -1,29 +1,29 @@
 export const HATYAI_CENTER = [7.0086, 100.4747];
 
 export const STATUS = {
-  pending: { label: 'รอความช่วยเหลือ', tone: 'brand' },
-  assigned: { label: 'มอบหมายทีมแล้ว', tone: 'safety' },
-  in_progress: { label: 'กำลังช่วยเหลือ', tone: 'warn' },
-  rescued: { label: 'ช่วยเหลือแล้ว', tone: 'shelter' },
-  cancelled: { label: 'ยกเลิก', tone: 'muted' },
+  pending: { label: 'รอความช่วยเหลือ' },
+  assigned: { label: 'มอบหมายทีมแล้ว' },
+  in_progress: { label: 'กำลังช่วยเหลือ' },
+  rescued: { label: 'ช่วยเหลือแล้ว' },
+  cancelled: { label: 'ยกเลิก' },
 };
 
 export const URGENCY = {
-  critical: { label: 'วิกฤต', hint: 'อันตรายถึงชีวิต ต้องช่วยทันที', tone: 'brand' },
-  high: { label: 'เร่งด่วน', hint: 'มีผู้ป่วย/ผู้สูงอายุ หรือน้ำสูงขึ้นเร็ว', tone: 'supply' },
-  medium: { label: 'ปานกลาง', hint: 'ติดอยู่ในบ้าน ยังปลอดภัย', tone: 'warn' },
-  low: { label: 'ไม่เร่งด่วน', hint: 'ต้องการเสบียงหรือความช่วยเหลือทั่วไป', tone: 'muted' },
+  critical: { label: 'วิกฤต', hint: 'อันตรายถึงชีวิต ต้องช่วยทันที' },
+  high: { label: 'เร่งด่วน', hint: 'มีผู้ป่วย/ผู้สูงอายุ หรือน้ำสูงขึ้นเร็ว' },
+  medium: { label: 'ปานกลาง', hint: 'ติดอยู่ในบ้าน ยังปลอดภัย' },
+  low: { label: 'ไม่เร่งด่วน', hint: 'ต้องการเสบียงหรือความช่วยเหลือทั่วไป' },
 };
 
 export const SHELTER_STATUS = {
-  open: { label: 'เปิดรับ', tone: 'shelter' },
-  full: { label: 'เต็มแล้ว', tone: 'brand' },
-  closed: { label: 'ปิด', tone: 'muted' },
+  open: { label: 'เปิดรับ' },
+  full: { label: 'เต็มแล้ว' },
+  closed: { label: 'ปิด' },
 };
 
 export const DIST_STATUS = {
-  active: { label: 'เปิดแจก', tone: 'supply' },
-  closed: { label: 'ปิดแล้ว', tone: 'muted' },
+  active: { label: 'เปิดแจก' },
+  closed: { label: 'ปิดแล้ว' },
 };
 
 export const VULNERABLE = [
@@ -91,6 +91,7 @@ export const vulnerableLabels = (r) => VULNERABLE.filter((v) => r[v.key]).map((v
 
 // เลขเคสของฉันที่เคยส่ง เก็บในเครื่อง
 const MY_CASES_KEY = 'hy_my_cases';
+const DISMISSED_CASES_KEY = 'hy_dismissed_cases';
 
 export function getMyCases() {
   try {
@@ -106,5 +107,23 @@ export function addMyCase(caseNo) {
     localStorage.setItem(MY_CASES_KEY, JSON.stringify(list));
   } catch {
     // localStorage ใช้ไม่ได้ (โหมดส่วนตัว) — ไม่เป็นไร ผู้ใช้ยังเห็นเลขเคสบนจอ
+  }
+}
+
+export function getDismissedCases() {
+  try {
+    const list = JSON.parse(localStorage.getItem(DISMISSED_CASES_KEY) || '[]');
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+export function dismissCase(caseNo) {
+  try {
+    const list = [caseNo, ...getDismissedCases().filter((c) => c !== caseNo)];
+    localStorage.setItem(DISMISSED_CASES_KEY, JSON.stringify(list));
+  } catch {
+    // เก็บไม่ได้ก็ยังซ่อนการ์ดในหน้าปัจจุบันได้
   }
 }

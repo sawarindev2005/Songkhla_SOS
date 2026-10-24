@@ -57,7 +57,7 @@ export default function TrackPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 pt-5 pb-8 md:px-[max(1.5rem,calc((100%-40rem)/2))] md:pt-8">
+    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 pt-5 pb-8 lg:px-[calc(50%-18rem)]">
       <header className="flex flex-col gap-1">
         <h1 className="text-7xl font-bold">เคสของฉัน</h1>
         <p className="font-body text-md text-t2">กรอกเลขเคสที่ได้รับหลังส่งคำขอ เช่น HY-00157</p>
@@ -85,9 +85,9 @@ export default function TrackPage() {
       </form>
 
       {myCases.length > 1 && (
-        <ChipRow label="เคสที่เคยแจ้งจากเครื่องนี้">
+        <ChipRow label="เคสที่เคยแจ้งจากเครื่องนี้" className="shrink-0">
           {myCases.map((c) => (
-            <Chip key={c} selected={c === caseNo} onClick={() => choose(c)} className="tabular-nums">
+            <Chip key={c} selected={c === caseNo} onClick={() => choose(c)} className="min-h-11 tabular-nums">
               {c}
             </Chip>
           ))}
@@ -179,6 +179,7 @@ function Timeline({ data }) {
       {STEPS.map((step, i) => {
         const done = step.statuses.includes(data.status);
         const current = done && (i === STEPS.length - 1 || !STEPS[i + 1].statuses.includes(data.status));
+        const time = step.key ? data[step.key] : data.status === 'in_progress' ? data.updated_at : null;
         return (
           <li key={step.label} aria-current={current ? 'step' : undefined} className="relative flex gap-3 pb-4 last:pb-0">
             {i < STEPS.length - 1 && (
@@ -200,8 +201,8 @@ function Timeline({ data }) {
               <p className={cn('text-md', current ? 'font-bold text-ok' : done ? 'font-semibold text-ink' : 'font-medium text-t3')}>
                 {step.label}
               </p>
-              {step.key && data[step.key] && (
-                <p className="font-body text-sm text-t3 tabular-nums">{formatDateTime(data[step.key])}</p>
+              {time && (
+                <p className="font-body text-sm text-t3 tabular-nums">{formatDateTime(time)}</p>
               )}
             </div>
           </li>

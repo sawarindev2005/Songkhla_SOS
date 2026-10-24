@@ -5,6 +5,9 @@ import { cn } from './cn';
 const VARIANT = {
   primary: 'rounded-lg font-semibold bg-acc text-white',
   danger: 'rounded-lg font-semibold bg-red text-white',
+  // ลบ / คืนเคส ในรายการ: เตือนด้วยสีแดงแต่ไม่แย่งสายตาเท่าปุ่มหลัก
+  dangerOutline: 'rounded-lg font-semibold border border-red-line bg-white text-red-tx hover:bg-red-bg',
+  ghost: 'rounded-lg font-semibold text-t2 hover:bg-s2 hover:text-ink',
   success: 'rounded-lg font-semibold bg-ok text-white',
   ink: 'rounded-lg font-semibold bg-ink text-white',
   outline: 'rounded-lg font-semibold border border-line2 bg-white text-ink',

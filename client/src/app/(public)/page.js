@@ -9,12 +9,13 @@ import { buildAnnouncements } from '@/lib/announcements';
 import { Chip, ChipRow } from '@/components/pk/Chip';
 import { HotlineFab } from '@/components/pk/HotlineFab';
 import { IconButton } from '@/components/pk/IconButton';
-import { MapSheet, mapArea, isWide, useSheetCollapsed } from '@/components/pk/MapSheet';
+import { MapSheet, WIDE } from '@/components/pk/MapSheet';
 import { MyCaseCard } from '@/components/pk/MyCaseCard';
 import { NewsTicker } from '@/components/pk/NewsTicker';
-import { DistributionPublicDetail, RequestPublicDetail, ShelterPublicDetail } from '@/components/pk/PublicDetail';
+import { DistributionPublicDetail, PlaceActions, RequestPublicDetail, ShelterPublicDetail } from '@/components/pk/PublicDetail';
 import { StatRow } from '@/components/pk/StatRow';
 import { CaseCard } from '@/components/pk/CaseCard';
+import { cn } from '@/components/pk/cn';
 import { EmptyState } from '@/components/pk/EmptyState';
 import { useToast } from '@/components/pk/Toast';
 import {
@@ -69,18 +70,15 @@ export default function HomePage() {
   const [focus, setFocus] = useState(null);
   const [me, setMe] = useState(null);
   const [locating, setLocating] = useState(false);
-  const [collapsed, setCollapsed] = useSheetCollapsed();
+  const [collapsed, setCollapsed] = useState(false);
 
-  const { cases: myCases, isSample } = useVisibleMyCases(stats.updatedAt?.getTime() ?? 0);
+  const { cases: myCases, dismiss } = useVisibleMyCases(stats.updatedAt?.getTime() ?? 0);
   // เคสที่ยังไม่จบทั้งหมด (รวมเคสของฉัน)
   const allPublic = publicRequests.data || [];
   // เคสของคนอื่น (ตัดเคสของฉันออก ซึ่งอยู่ที่การ์ดด้านบนแล้ว)
   const myIds = new Set(myCases.map((c) => c.id));
   const otherCases = allPublic.filter((r) => !myIds.has(r.id));
-  // ชุดที่ใช้นับตัวเลข: เคสในระบบ + เคสตัวอย่าง (ถ้ามี) ให้ตอนสาธิตตัวเลขสอดคล้องกับการ์ด "เคสที่ฉันแจ้ง"
-  // เคสตัวอย่างไม่มีในฐานข้อมูล — ลบ sampleMyCases ออกเมื่อใช้งานจริง ส่วนนี้จะนับแค่เคสในระบบเอง
-  const countedCases = isSample ? [...allPublic, ...myCases] : allPublic;
-  const mineInPublic = countedCases.length - otherCases.length;
+  const mineInPublic = allPublic.length - otherCases.length;
   // ดูทั้งหมด = รอช่วยขึ้นก่อน แล้วค่อยที่ทีมกำลังช่วย | ในแผ่น = สูงสุด 3 เคส สถานะคละกันตามที่มีจริง
   const shownCases = showAllCases ? sortByStatus(otherCases) : previewCases(otherCases, CASES_PREVIEW);
   // หมุดบนแผนที่: เคสของฉันเสมอ + เคสของคนอื่นเฉพาะที่กำลังเปิดดูอยู่ (แผนที่ไม่รกด้วยหมุดทุกเคส)
@@ -104,17 +102,19 @@ export default function HomePage() {
 
   // ความสูงของแผ่นข้อมูลที่บังแผนที่ ใช้วางจุดที่เลือกไว้กลางพื้นที่ที่ยังมองเห็น
   const sheetRef = useRef(null);
-  const coverBottom = () => (isWide() ? 0 : sheetRef.current?.offsetHeight ?? 0);
+  // จอกว้าง แผ่นข้อมูลเป็นแผงด้านซ้าย ไม่บังด้านล่างของแผนที่
+  const coverBottom = () => (window.matchMedia(WIDE).matches ? 0 : sheetRef.current?.offsetHeight ?? 0);
   // ความสูงที่แถบข่าวสาร + แถวชิปบังด้านบน
   const topRef = useRef(null);
   const coverTop = () => topRef.current?.offsetHeight ?? 0;
+  const coverElements = () => [sheetRef.current, topRef.current];
 
   // แตะหมุด → เปิดรายละเอียด และเลื่อนแผนที่ให้หมุดไม่ถูกแผ่นหรือแถบด้านบนบัง
   function handleSelect(type, item) {
     if (type === 'rescuer') return;
     setSelected({ type, id: item.id });
     setCollapsed(false);
-    setFocus({ lat: item.lat, lng: item.lng, coverBottom, coverTop });
+    setFocus({ lat: item.lat, lng: item.lng, coverBottom, coverTop, coverElements });
   }
 
   function locateMe() {
@@ -128,7 +128,7 @@ export default function HomePage() {
         setLocating(false);
         const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setMe(p);
-        setFocus({ ...p, zoom: 16, coverBottom, coverTop });
+        setFocus({ ...p, zoom: 16, coverBottom, coverTop, coverElements });
       },
       () => {
         setLocating(false);
@@ -142,9 +142,18 @@ export default function HomePage() {
   // ตัวเลขเคสนับจากรายการเคสชุดเดียวกับที่แสดงด้านล่าง ตัวเลขกับรายการจึงตรงกันเสมอ
   // รอความช่วยเหลือ = pending  มีทีมรับเคสแล้ว = มอบหมายทีมแล้ว + กำลังช่วยเหลือ
   // รายการยังโหลดไม่ได้ → ใช้ตัวเลขจากสถิติ (เกณฑ์เดียวกัน)
-  const waitingCount = publicRequests.data ? countedCases.filter((r) => r.status === 'pending').length : s?.pending;
-  const helpingCount = publicRequests.data ? countedCases.length - waitingCount : s?.in_progress;
-  const loadError = stats.error;
+  const waitingCount = publicRequests.data ? allPublic.filter((r) => r.status === 'pending').length : s?.pending;
+  const helpingCount = publicRequests.data ? allPublic.length - waitingCount : s?.in_progress;
+  // ชั้นข้อมูลที่โหลดไม่สำเร็จ แจ้งแยกให้รู้ว่า "ไม่มีหมุด" เพราะโหลดไม่ได้ ไม่ใช่เพราะไม่มีข้อมูลจริง
+  const layers = [
+    [stats, 'ตัวเลขสรุป'],
+    [publicRequests, 'คำขอความช่วยเหลือ'],
+    [shelters, 'ที่พักพิง'],
+    [distributions, 'จุดแจกจ่าย'],
+    [rescuers, 'ตำแหน่งทีมกู้ภัย'],
+  ];
+  const failed = layers.filter(([l]) => l.error).map(([, name]) => name);
+  const retryFailed = () => layers.forEach(([l]) => l.error && l.refresh());
 
   const announcements = buildAnnouncements({
     shelters: data.shelters,
@@ -161,8 +170,8 @@ export default function HomePage() {
         <MyCaseCard
           data={latestCase}
           more={myCases.length - 1}
-          href={isSample ? null : `/track?case=${latestCase.case_no}`}
-          onSelect={() => handleSelect('request', latestCase)}
+          href={`/track?case=${latestCase.case_no}`}
+          onDismiss={dismiss}
         />
       ) : (
         <span />
@@ -173,7 +182,7 @@ export default function HomePage() {
           label="ไปยังตำแหน่งของฉัน"
           tone={me ? 'accent' : 'float'}
           aria-pressed={!!me}
-          size={40}
+          size={44}
           onClick={locateMe}
           disabled={locating}
         >
@@ -194,9 +203,8 @@ export default function HomePage() {
   return (
     <>
       <h1 className="sr-only">แผนที่สถานการณ์น้ำท่วม อำเภอหาดใหญ่</h1>
-      <div className={`absolute inset-0 isolate ${mapArea(collapsed)}`}>
+      <div className="absolute inset-0 isolate">
         <MapView
-          pinStyle="public"
           requests={data.requests}
           shelters={data.shelters}
           distributions={data.distributions}
@@ -205,7 +213,7 @@ export default function HomePage() {
           show={show}
           selected={selected}
           onSelect={handleSelect}
-          onMapClick={() => !isWide() && setCollapsed(true)}
+          onMapClick={() => !window.matchMedia(WIDE).matches && setCollapsed(true)}
           focus={focus}
           me={me}
           locate={false}
@@ -213,14 +221,15 @@ export default function HomePage() {
       </div>
 
       {/* บนสุดของแผนที่: แถบข่าวสารจากศูนย์ (เลื่อนเอง ไม่ต้องกดดู) แล้วตามด้วยปุ่มชั้นข้อมูล */}
-      <div ref={topRef} className={`pointer-events-none absolute inset-x-0 top-0 z-[500] flex flex-col pt-3 md:items-end md:px-4 md:pt-4 ${mapArea(collapsed)}`}>
+      <div ref={topRef} className="pointer-events-none absolute inset-x-0 top-0 z-[500] lg:left-[25.5rem] flex flex-col pt-3">
         <NewsTicker
           items={announcements}
           updatedAt={shelters.updatedAt}
           loading={shelters.loading || distributions.loading}
-          className="px-3 md:w-full md:max-w-lg md:px-0"
+          className="px-3"
         />
-        <ChipRow label="ชั้นข้อมูลบนแผนที่" className="pointer-events-auto px-3 py-2.5 md:max-w-full md:px-0">
+        {/* ดูรายละเอียดบนมือถือ: เว้นแถบแผนที่ให้เห็นหมุดใต้ข่าวสาร; กลับจากรายละเอียดแล้วแสดงตัวกรองตามเดิม */}
+        <ChipRow label="ชั้นข้อมูลบนแผนที่" className={cn('pointer-events-auto px-3 py-2.5', selectedItem && 'hidden lg:flex')}>
           {LAYERS.map((l) => (
             <Chip
               key={l.key}
@@ -241,13 +250,15 @@ export default function HomePage() {
         ref={sheetRef}
         label="ข้อมูลสถานการณ์"
         // เปิดมาเตี้ย เห็นแค่หัวข้อ + ตัวเลข (แผนที่เห็นมาก) ลากขึ้น/เลื่อน → เห็นรายการเคสล่าสุดของคนอื่น
-        // เปิดรายละเอียดจุด → ครึ่งจอเดิม ลากขึ้นดูปุ่มโทร/นำทางได้
+        // เปิดรายละเอียดจุด → เต็มสูง พร้อมปุ่มโทร/นำทางค้างใต้ส่วนเลื่อน
         peek={!selectedItem}
+        detailKey={selectedItem ? `${selected.type}:${selectedItem.id}` : null}
+        footer={selectedItem && ['shelter', 'distribution'].includes(selected.type) && <PlaceActions place={selectedItem} />}
         hideToolbarWhenFull
         // ลากแผ่นลงจากเต็มสูง หรือย่อแผ่น → รายการคำขอกลับเป็น 3 เคส
         onFullChange={(f) => !f && setShowAllCases(false)}
         collapsed={collapsed}
-        onToggle={() => setCollapsed(!collapsed)}
+        onToggle={() => setCollapsed((c) => !c)}
         toolbar={toolbar}
         summary={
           <p className="flex items-baseline justify-between gap-3 pb-1">
@@ -284,13 +295,15 @@ export default function HomePage() {
           </>
         ) : (
           <>
-            {loadError && (
+            {failed.length > 0 && (
               <p role="alert" className="flex items-start gap-2 text-md text-red-tx">
                 <WarningIcon size={18} weight="bold" className="mt-0.5 shrink-0" aria-hidden />
-                <span className="flex-1">{loadError.message}</span>
+                <span className="flex-1">
+                  โหลด{failed.join(', ')}ไม่สำเร็จ ข้อมูลบนแผนที่อาจไม่ครบ
+                </span>
                 <button
                   type="button"
-                  onClick={stats.refresh}
+                  onClick={retryFailed}
                   className="font-semibold text-acc underline"
                 >
                   ลองใหม่
@@ -311,10 +324,9 @@ export default function HomePage() {
                 ไม่ใส่ตัวเลขสรุปซ้ำ เพราะอยู่ในช่องตัวเลขด้านบนแล้ว */}
             <section aria-labelledby="cases-title" className="flex flex-col gap-1 border-t border-line pt-3.5">
               <h3 id="cases-title" className="text-lg font-bold">คำขอความช่วยเหลือตอนนี้</h3>
-              <p className="font-body text-xs text-t3">
-                {mineInPublic > 0 && `รวมเคสของคุณ ${mineInPublic} เคส (อยู่ที่การ์ดด้านบน) · `}
-                ไม่แสดงชื่อและเบอร์โทรของผู้แจ้ง
-              </p>
+              {mineInPublic > 0 && (
+                <p className="font-body text-xs text-t3">รวมเคสของคุณ {mineInPublic} เคส (อยู่ที่การ์ดด้านบน)</p>
+              )}
               {publicRequests.loading ? (
                 <p role="status" className="flex items-center justify-center gap-2 py-4 text-t3">
                   <CircleNotchIcon size={18} className="animate-spin" aria-hidden />
@@ -348,4 +360,3 @@ export default function HomePage() {
     </>
   );
 }
-

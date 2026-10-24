@@ -2,6 +2,7 @@
 import { usePathname } from 'next/navigation';
 import { NetBar } from './NetBar';
 import { PublicTopBar } from './PublicTopBar';
+import { SideRail } from './SideRail';
 import { TabBar } from './TabBar';
 import { ToastProvider } from './Toast';
 import { useOnline } from './useOnline';
@@ -9,7 +10,7 @@ import { ROLE_HOME, useAuth } from '@/lib/auth';
 import { PUBLIC_LOGIN, PUBLIC_SOS, PUBLIC_TABS, staffTab } from './nav-items';
 import { cn } from './cn';
 
-// โครงหน้าคนทั่วไป: มือถือ = กว้างไม่เกินจอมือถือ แถบบน + เนื้อหา + แถบเมนูล่าง | ตั้งแต่ md (แท็บเล็ต/คอม) = เต็มจอ เมนูย้ายขึ้นแถบบน
+// โครงหน้าคนทั่วไปตามต้นแบบ: กว้างไม่เกินจอมือถือ แถบบน + เนื้อหา + แถบเมนูล่าง
 export function PublicShell({ children, className }) {
   const path = usePathname();
   const online = useOnline();
@@ -17,7 +18,7 @@ export function PublicShell({ children, className }) {
   const staffHome = user ? ROLE_HOME[user.role] : null;
   const tabs = [...PUBLIC_TABS, staffHome ? staffTab(staffHome) : PUBLIC_LOGIN];
   return (
-    <div data-ui="public" className={cn('min-h-dvh bg-page font-ui text-ink', className)}>
+    <div className={cn('min-h-dvh bg-page text-ink', className)}>
       <ToastProvider>
         <a
           href="#main"
@@ -25,14 +26,20 @@ export function PublicShell({ children, className }) {
         >
           ข้ามไปยังเนื้อหาหลัก
         </a>
-        <div className="mx-auto flex h-dvh max-w-120 flex-col bg-white sm:border-x sm:border-line md:max-w-none md:border-x-0">
-          <PublicTopBar items={tabs} sos={PUBLIC_SOS} path={path} />
-          <NetBar online={online} />
-          <main id="main" className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-            {children}
-          </main>
-          <div className="md:hidden">
-            <TabBar items={tabs} center={PUBLIC_SOS} path={path} />
+        {/* มือถือ: แถบบน + เนื้อหา + แถบเมนูล่าง | จอกว้าง: แถบไอคอนซ้าย + เนื้อหาเต็มจอ (แบบ Google Maps) */}
+        <div className="mx-auto flex h-dvh max-w-120 flex-col bg-white sm:border-x sm:border-line lg:max-w-none lg:flex-row lg:border-x-0">
+          <SideRail items={tabs} center={PUBLIC_SOS} path={path} className="hidden lg:flex" />
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div className="contents lg:hidden">
+              <PublicTopBar />
+            </div>
+            <NetBar online={online} />
+            <main id="main" className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+              {children}
+            </main>
+            <div className="contents lg:hidden">
+              <TabBar items={tabs} center={PUBLIC_SOS} path={path} />
+            </div>
           </div>
         </div>
       </ToastProvider>

@@ -10,11 +10,11 @@ import { CaretLeftIcon, CircleNotchIcon, CrosshairIcon, HouseLineIcon, Magnifyin
 import { PlaceRow } from './CaseCard';
 import { EmptyState } from './EmptyState';
 import { IconButton } from './IconButton';
-import { MapSheet, mapArea, isWide, useSheetCollapsed } from './MapSheet';
+import { MapSheet, WIDE } from './MapSheet';
 import { MyCaseCard } from './MyCaseCard';
 import { NewsTicker } from './NewsTicker';
 import { HotlineFab } from './HotlineFab';
-import { DistributionPublicDetail, ShelterPublicDetail } from './PublicDetail';
+import { DistributionPublicDetail, PlaceActions, ShelterPublicDetail } from './PublicDetail';
 import { SearchField } from './TextField';
 import { useToast } from './Toast';
 import { isNearFull, openHours, PlaceStatusBadge, shelterFree } from './domain';
@@ -54,7 +54,7 @@ export function PlaceList({ type }) {
   const toast = useToast();
   const { data, error, loading, refresh, updatedAt } = usePolling(cfg.path);
   // การ์ดลอย "เคสที่ฉันแจ้ง" แบบเดียวกับหน้าภาพรวม ให้เห็นสถานะเคสตัวเองได้ทุกหน้า
-  const { cases: myCases, isSample } = useVisibleMyCases(updatedAt?.getTime() ?? 0);
+  const { cases: myCases, dismiss } = useVisibleMyCases(updatedAt?.getTime() ?? 0);
   const latestCase = myCases[0];
 
   // แถบข่าวสารชุดเดียวกับหน้าภาพรวม: ดึงเพิ่มเฉพาะข้อมูลอีกหมวดที่หน้านี้ยังไม่มี
@@ -69,7 +69,7 @@ export function PlaceList({ type }) {
   const [locating, setLocating] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [focus, setFocus] = useState(null);
-  const [collapsed, setCollapsed] = useSheetCollapsed();
+  const [collapsed, setCollapsed] = useState(false);
 
   const places = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -88,14 +88,16 @@ export function PlaceList({ type }) {
 
   // ความสูงของแผ่นข้อมูลที่บังแผนที่ ใช้วางจุดที่เลือกไว้กลางพื้นที่ที่ยังมองเห็น
   const sheetRef = useRef(null);
-  const coverBottom = () => (isWide() ? 0 : sheetRef.current?.offsetHeight ?? 0);
+  // จอกว้าง แผ่นข้อมูลเป็นแผงด้านซ้าย ไม่บังด้านล่างของแผนที่
+  const coverBottom = () => (window.matchMedia(WIDE).matches ? 0 : sheetRef.current?.offsetHeight ?? 0);
   // ความสูงที่แถบข่าวสารบังด้านบน
   const topRef = useRef(null);
   const coverTop = () => topRef.current?.offsetHeight ?? 0;
+  const coverElements = () => [sheetRef.current, topRef.current];
 
   function choose(p) {
     setSelectedId(p.id);
-    setFocus({ lat: p.lat, lng: p.lng, coverBottom, coverTop });
+    setFocus({ lat: p.lat, lng: p.lng, coverBottom, coverTop, coverElements });
     setCollapsed(false);
   }
 
@@ -110,7 +112,7 @@ export function PlaceList({ type }) {
         setLocating(false);
         const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setMe(p);
-        setFocus({ ...p, zoom: 15, coverBottom, coverTop });
+        setFocus({ ...p, zoom: 15, coverBottom, coverTop, coverElements });
       },
       () => {
         setLocating(false);
@@ -122,13 +124,12 @@ export function PlaceList({ type }) {
 
   return (
     <>
-      <div className={`absolute inset-0 isolate ${mapArea(collapsed)}`}>
+      <div className="absolute inset-0 isolate">
         <MapView
-          pinStyle="public"
           {...{ [cfg.mapProp]: places }}
           selected={selectedId != null ? { type, id: selectedId } : null}
           onSelect={(_, p) => choose(p)}
-          onMapClick={() => !isWide() && setCollapsed(true)}
+          onMapClick={() => !window.matchMedia(WIDE).matches && setCollapsed(true)}
           focus={focus}
           me={me}
           locate={false}
@@ -136,25 +137,24 @@ export function PlaceList({ type }) {
       </div>
 
       {/* บนสุดของแผนที่: แถบข่าวสารจากศูนย์ แบบเดียวกับหน้าภาพรวม */}
-      <div ref={topRef} className={`pointer-events-none absolute inset-x-0 top-0 z-[500] flex flex-col pt-3 md:items-end md:px-4 md:pt-4 ${mapArea(collapsed)}`}>
-        <NewsTicker items={announcements} updatedAt={updatedAt} loading={loading || other.loading} className="px-3 md:w-full md:max-w-lg md:px-0" />
+      <div ref={topRef} className="pointer-events-none absolute inset-x-0 top-0 z-[500] lg:left-[25.5rem] pt-3">
+        <NewsTicker items={announcements} updatedAt={updatedAt} loading={loading || other.loading} className="px-3" />
       </div>
 
       <MapSheet
         ref={sheetRef}
         label={cfg.title}
-        // รายการเปิดมาเตี้ยเท่าหน้าภาพรวม ให้เห็นแผนที่มาก ลากขึ้น/เลื่อนรายการเพื่อดูต่อจนเต็มสูง
-        // เปิดรายละเอียดสถานที่ → กลับเป็นครึ่งจอเดิม ให้เห็นเวลาเปิด ปุ่มโทร ปุ่มนำทางครบ
-        peek={!selected}
+        detailKey={selected ? `${type}:${selected.id}` : null}
+        footer={selected && <PlaceActions place={selected} />}
+        // ไม่ใช้แบบเตี้ย (peek): เปิดมาครึ่งจอให้เห็นรายการแรกๆ ทันที ไม่ต้องรู้ว่าต้องลากขึ้น
         // ดูรายละเอียดจุดแบบเต็มสูง → ซ่อนปุ่มลอยไม่ให้บังหมุด | รายการเต็มสูงยังเห็นปุ่ม ◎ ไว้เรียงจากใกล้สุด
         hideToolbarWhenFull={!!selected}
         collapsed={collapsed}
-        onToggle={() => setCollapsed(!collapsed)}
+        onToggle={() => setCollapsed((c) => !c)}
         toolbar={
           <>
             {latestCase ? (
-              // เคสตัวอย่างไม่มีหน้าติดตาม → พาไปหน้าภาพรวมที่ปักหมุดเคสไว้
-              <MyCaseCard data={latestCase} more={myCases.length - 1} href={isSample ? '/' : `/track?case=${latestCase.case_no}`} />
+              <MyCaseCard data={latestCase} more={myCases.length - 1} href={`/track?case=${latestCase.case_no}`} onDismiss={dismiss} />
             ) : (
               <span />
             )}
@@ -165,7 +165,7 @@ export function PlaceList({ type }) {
                 label="ไปยังตำแหน่งของฉัน"
                 tone={me ? 'accent' : 'float'}
                 aria-pressed={!!me}
-                size={40}
+                size={44}
                 onClick={locateMe}
                 disabled={locating}
               >

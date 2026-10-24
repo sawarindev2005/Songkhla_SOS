@@ -1,15 +1,25 @@
 'use client';
 
 import { useState } from 'react';
-import { Pencil, Search, Trash2, UserPlus } from 'lucide-react';
 import { PageHeader } from '@/components/StaffShell';
-import { Badge, Button, ErrorBanner, Field, Modal, Spinner, cx, inputClass } from '@/components/ui';
+import { Badge } from '@/components/pk/Badge';
+import { Button } from '@/components/pk/Button';
+import { Checkbox } from '@/components/pk/Checkbox';
+import { ConfirmDialog } from '@/components/pk/ConfirmDialog';
+import { ErrorBanner } from '@/components/pk/ErrorBanner';
+import { Field, inputClass } from '@/components/pk/Field';
+import { Modal } from '@/components/pk/Modal';
+import { Segmented } from '@/components/pk/Segmented';
+import { Spinner } from '@/components/pk/Spinner';
+import { SearchField } from '@/components/pk/TextField';
+import {
+  CheckCircleIcon, MagnifyingGlassIcon, PencilSimpleIcon, TrashIcon, UserPlusIcon, XCircleIcon,
+} from '@/components/pk/icons';
 import { usePolling } from '@/hooks/usePolling';
 import { api } from '@/lib/api';
 import { ROLE_LABEL, useAuth } from '@/lib/auth';
 import { formatDateTime, timeAgo } from '@/lib/format';
 
-const ROLE_TONE = { admin: 'brand', command: 'safety', rescuer: 'shelter' };
 const EMPTY = { username: '', full_name: '', phone: '', role: 'rescuer', team_name: '', password: '', is_active: true };
 
 function validate(form, isNew) {
@@ -50,10 +60,8 @@ export default function UsersPage() {
     );
   }
 
-  const set = (key) => (e) => {
-    const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-    setEditing((ed) => ({ ...ed, form: { ...ed.form, [key]: value } }));
-  };
+  const setValue = (key, value) => setEditing((ed) => ({ ...ed, form: { ...ed.form, [key]: value } }));
+  const set = (key) => (e) => setValue(key, e.target.value);
 
   async function save(e) {
     e.preventDefault();
@@ -103,43 +111,32 @@ export default function UsersPage() {
         title="จัดการบัญชีผู้ใช้"
         desc="สร้างบัญชีให้หน่วยกู้ภัยและเจ้าหน้าที่ กำหนดสิทธิ์ ระงับ หรือรีเซ็ตรหัสผ่าน"
         actions={
-          <Button variant="dark" onClick={() => open(null)}>
-            <UserPlus className="size-4" aria-hidden />
+          <Button size="sm" block={false} onClick={() => open(null)} icon={<UserPlusIcon size={18} weight="bold" aria-hidden />}>
             สร้างบัญชีใหม่
           </Button>
         }
       />
 
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <label htmlFor="user-search" className="sr-only">
-            ค้นหาบัญชี
-          </label>
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden />
-          <input
-            id="user-search"
-            type="search"
-            className={cx(inputClass, 'pl-9')}
-            placeholder="ค้นหาชื่อ ชื่อผู้ใช้ ทีม หรือเบอร์โทร"
+      <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center">
+        <div className="flex-1">
+          <SearchField
+            label="ค้นหาบัญชี"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={setQuery}
+            placeholder="ค้นหาชื่อ ชื่อผู้ใช้ ทีม หรือเบอร์โทร"
+            icon={<MagnifyingGlassIcon size={18} className="shrink-0 text-t3" aria-hidden />}
           />
         </div>
-        <div className="flex gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1" role="tablist" aria-label="กรองตามบทบาท">
-          {['all', 'rescuer', 'command', 'admin'].map((r) => (
-            <button
-              key={r}
-              role="tab"
-              aria-selected={roleFilter === r}
-              onClick={() => setRoleFilter(r)}
-              className={cx(
-                'min-h-9 shrink-0 cursor-pointer rounded-lg px-3 text-sm font-semibold',
-                roleFilter === r ? 'bg-surface shadow-sm' : 'text-muted hover:text-ink'
-              )}
-            >
-              {r === 'all' ? 'ทั้งหมด' : ROLE_LABEL[r]}
-            </button>
-          ))}
+        <div className="overflow-x-auto xl:w-[42rem] [&_button]:whitespace-nowrap [&_button]:px-3">
+          <Segmented
+            label="กรองตามบทบาท"
+            value={roleFilter}
+            onChange={setRoleFilter}
+            options={['all', 'rescuer', 'command', 'admin'].map((r) => ({
+              value: r,
+              label: r === 'all' ? 'ทั้งหมด' : ROLE_LABEL[r],
+            }))}
+          />
         </div>
       </div>
 
@@ -147,74 +144,159 @@ export default function UsersPage() {
       {loading && <Spinner />}
 
       {data && (
-        <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="bg-canvas text-muted">
-              <tr>
-                <th className="px-4 py-3 font-medium">ชื่อ / ชื่อผู้ใช้</th>
-                <th className="px-4 py-3 font-medium">บทบาท</th>
-                <th className="px-4 py-3 font-medium">ทีม / เบอร์โทร</th>
-                <th className="px-4 py-3 font-medium">สถานะ</th>
-                <th className="px-4 py-3 font-medium">ตำแหน่งล่าสุด</th>
-                <th className="px-4 py-3 text-right font-medium">จัดการ</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-muted">
-                    ไม่พบบัญชีที่ตรงกับการค้นหา
-                  </td>
-                </tr>
-              )}
-              {users.map((u) => (
-                <tr key={u.id} className="border-t border-line">
-                  <td className="px-4 py-3">
-                    <p className="font-semibold">
-                      {u.full_name} {u.id === me?.id && <span className="text-xs font-normal text-muted">(คุณ)</span>}
-                    </p>
-                    <p className="text-muted">@{u.username}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge tone={ROLE_TONE[u.role]}>{ROLE_LABEL[u.role]}</Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p>{u.team_name || '-'}</p>
-                    <p className="tabular text-muted">{u.phone || '-'}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge tone={u.is_active ? 'shelter' : 'muted'}>{u.is_active ? 'ใช้งาน' : 'ระงับ'}</Badge>
-                  </td>
-                  <td className="px-4 py-3 text-muted" title={formatDateTime(u.location_updated_at)}>
+        <>
+          <ul className="flex flex-col gap-3 md:hidden">
+            {users.length === 0 && (
+              <li className="rounded-xl border border-line bg-white px-4 py-8 text-center text-t2">
+                ไม่พบบัญชีที่ตรงกับการค้นหา
+              </li>
+            )}
+            {users.map((u) => (
+              <li key={u.id} className="min-w-0 rounded-xl border border-line bg-white p-4 text-base break-words">
+                <p className="font-semibold">
+                  {u.full_name} {u.id === me?.id && <span className="text-xs font-normal text-t2">(คุณ)</span>}
+                </p>
+                <p className="text-t2">@{u.username}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Badge boxed>{ROLE_LABEL[u.role]}</Badge>
+                  <Badge
+                    tone={u.is_active ? 'ok' : 'gray'}
+                    icon={u.is_active ? (
+                      <CheckCircleIcon size={15} weight="bold" aria-hidden />
+                    ) : (
+                      <XCircleIcon size={15} weight="bold" aria-hidden />
+                    )}
+                  >
+                    {u.is_active ? 'ใช้งาน' : 'ระงับ'}
+                  </Badge>
+                </div>
+                <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
+                  <dt className="text-t2">ทีม</dt>
+                  <dd>{u.team_name || '-'}</dd>
+                  <dt className="text-t2">เบอร์โทร</dt>
+                  <dd className="tabular-nums">{u.phone || '-'}</dd>
+                  <dt className="text-t2">ตำแหน่งล่าสุด</dt>
+                  <dd title={formatDateTime(u.location_updated_at)}>
                     {u.role === 'rescuer' ? (u.location_updated_at ? timeAgo(u.location_updated_at) : 'ยังไม่มาร์ค') : '-'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end gap-1">
-                      <Button size="sm" variant="ghost" onClick={() => open(u)} aria-label={`แก้ไข ${u.full_name}`}>
-                        <Pencil className="size-4" aria-hidden />
-                        แก้ไข
-                      </Button>
-                      {u.id !== me?.id && (
+                  </dd>
+                </dl>
+                <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-line pt-3">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    block={false}
+                    onClick={() => open(u)}
+                    aria-label={`แก้ไข ${u.full_name}`}
+                    icon={<PencilSimpleIcon size={18} aria-hidden />}
+                  >
+                    แก้ไข
+                  </Button>
+                  {u.id !== me?.id && (
+                    <Button
+                      size="sm"
+                      variant="dangerOutline"
+                      block={false}
+                      onClick={() => {
+                        setSaveError(null);
+                        setDeleting(u);
+                      }}
+                      aria-label={`ลบ ${u.full_name}`}
+                      icon={<TrashIcon size={18} aria-hidden />}
+                    >
+                      ลบ
+                    </Button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto rounded-xl border border-line bg-white md:block">
+            <table className="w-full min-w-[760px] text-left text-base">
+              <thead className="bg-s1 text-t2">
+                <tr>
+                  <th className="px-4 py-3 font-medium">ชื่อ / ชื่อผู้ใช้</th>
+                  <th className="px-4 py-3 font-medium">บทบาท</th>
+                  <th className="px-4 py-3 font-medium">ทีม / เบอร์โทร</th>
+                  <th className="px-4 py-3 font-medium">สถานะ</th>
+                  <th className="px-4 py-3 font-medium">ตำแหน่งล่าสุด</th>
+                  <th className="px-4 py-3 text-right font-medium">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-t2">
+                      ไม่พบบัญชีที่ตรงกับการค้นหา
+                    </td>
+                  </tr>
+                )}
+                {users.map((u) => (
+                  <tr key={u.id} className="border-t border-line">
+                    <td className="px-4 py-3">
+                      <p className="font-semibold">
+                        {u.full_name} {u.id === me?.id && <span className="text-xs font-normal text-t2">(คุณ)</span>}
+                      </p>
+                      <p className="text-t2">@{u.username}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge boxed>{ROLE_LABEL[u.role]}</Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p>{u.team_name || '-'}</p>
+                      <p className="text-t2 tabular-nums">{u.phone || '-'}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge
+                        tone={u.is_active ? 'ok' : 'gray'}
+                        icon={
+                          u.is_active ? (
+                            <CheckCircleIcon size={15} weight="bold" aria-hidden />
+                          ) : (
+                            <XCircleIcon size={15} weight="bold" aria-hidden />
+                          )
+                        }
+                      >
+                        {u.is_active ? 'ใช้งาน' : 'ระงับ'}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-t2" title={formatDateTime(u.location_updated_at)}>
+                      {u.role === 'rescuer' ? (u.location_updated_at ? timeAgo(u.location_updated_at) : 'ยังไม่มาร์ค') : '-'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-2">
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="text-brand-dark hover:bg-brand-soft hover:text-brand-dark"
-                          onClick={() => {
-                            setSaveError(null);
-                            setDeleting(u);
-                          }}
-                          aria-label={`ลบ ${u.full_name}`}
+                          block={false}
+                          onClick={() => open(u)}
+                          aria-label={`แก้ไข ${u.full_name}`}
+                          icon={<PencilSimpleIcon size={18} aria-hidden />}
                         >
-                          <Trash2 className="size-4" aria-hidden />
+                          แก้ไข
                         </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                        {u.id !== me?.id && (
+                          <Button
+                            size="sm"
+                            variant="dangerOutline"
+                            block={false}
+                            onClick={() => {
+                              setSaveError(null);
+                              setDeleting(u);
+                            }}
+                            aria-label={`ลบ ${u.full_name}`}
+                            icon={<TrashIcon size={18} aria-hidden />}
+                          >
+                            ลบ
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       <Modal
@@ -223,10 +305,10 @@ export default function UsersPage() {
         onClose={() => setEditing(null)}
         footer={
           <>
-            <Button variant="outline" onClick={() => setEditing(null)}>
+            <Button variant="outline" size="sm" block={false} onClick={() => setEditing(null)}>
               ยกเลิก
             </Button>
-            <Button type="submit" form="user-form" variant="dark" loading={saving}>
+            <Button type="submit" form="user-form" size="sm" block={false} loading={saving}>
               บันทึก
             </Button>
           </>
@@ -280,10 +362,13 @@ export default function UsersPage() {
               )}
             </Field>
             {editing.id && !isSelf && (
-              <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium sm:col-span-2">
-                <input type="checkbox" className="size-5 accent-shelter" checked={f.is_active} onChange={set('is_active')} />
+              <Checkbox
+                checked={f.is_active}
+                onChange={(v) => setValue('is_active', v)}
+                className="min-h-11 cursor-pointer text-base font-medium sm:col-span-2"
+              >
                 เปิดใช้งานบัญชี (ยกเลิกเพื่อระงับการเข้าสู่ระบบ)
-              </label>
+              </Checkbox>
             )}
             <div className="sm:col-span-2">
               <ErrorBanner error={saveError} />
@@ -292,20 +377,15 @@ export default function UsersPage() {
         )}
       </Modal>
 
-      <Modal
+      <ConfirmDialog
         open={Boolean(deleting)}
         title="ลบบัญชี"
-        onClose={() => setDeleting(null)}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setDeleting(null)}>
-              ยกเลิก
-            </Button>
-            <Button variant="primary" loading={saving} onClick={remove}>
-              ลบบัญชี
-            </Button>
-          </>
-        }
+        confirmLabel="ลบบัญชี"
+        confirmVariant="danger"
+        confirmIcon={<TrashIcon size={20} aria-hidden />}
+        loading={saving}
+        onConfirm={remove}
+        onCancel={() => setDeleting(null)}
       >
         <p>
           ลบบัญชี <b>{deleting?.full_name}</b> (@{deleting?.username}) ถาวร? เคสที่บัญชีนี้รับไว้จะกลับเข้าคิว
@@ -314,7 +394,7 @@ export default function UsersPage() {
         <div className="mt-3">
           <ErrorBanner error={saveError} />
         </div>
-      </Modal>
+      </ConfirmDialog>
     </>
   );
 }

@@ -6,10 +6,22 @@ import { cn } from './cn';
 const DRAG_THRESHOLD = 48;
 // ความสูงแผ่นตอนครึ่งจอแบบ peek = เท่ากับแผ่นหน้าภาพรวม (ที่จับ + หัวข้อ + ตัวเลข 3 ช่อง) วัดจากจอจริง
 // แก้หัวหรือตัวเลขหน้าภาพรวมแล้วความสูงเปลี่ยน ต้องวัดใหม่ให้สองหน้ายังเท่ากัน
-const PEEK_HEIGHT = 'h-[167px] short:h-[156px] lg:h-auto';
+const PEEK_HEIGHT = 'max-md:h-[167px] max-md:short:h-[156px]';
 
-// จอกว้าง (ตรงกับ lg ของ Tailwind): แผ่นข้อมูลกลายเป็นแผงลอยด้านซ้ายเต็มสูง แทนแผ่นด้านล่าง
-export const WIDE = '(min-width: 1024px)';
+// จอกว้าง (ตรงกับ md ของ Tailwind = แท็บเล็ตขึ้นไป): แผ่นข้อมูลกลายเป็นแผงลอยด้านซ้ายเต็มสูง แทนแผ่นด้านล่าง
+export const WIDE = '(min-width: 768px)';
+
+function useWide() {
+  const [wide, setWide] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(WIDE);
+    const sync = () => setWide(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+  return wide;
+}
 
 /**
  * แผ่นข้อมูลด้านล่างแผนที่ 3 ระดับ: ย่อ (แถวสรุป) → ครึ่งจอ (ค่าเริ่มต้นเมื่อขยาย ยังเห็นแผนที่) → เต็มสูง
@@ -20,11 +32,13 @@ export const WIDE = '(min-width: 1024px)';
  * hideToolbarWhenFull = ซ่อนปุ่มลอยตอนขยายเต็มสูง (เช่น ตอนดูรายละเอียดจุด ไม่ให้บังหมุดที่เลือก)
  * onFullChange(full) = แจ้งเมื่อแผ่นเข้า/ออกจากเต็มสูง (รวมตอนย่อแผ่น) เช่น ใช้ย่อรายการกลับตอนลากแผ่นลง
  * detailKey = เปลี่ยนจุดที่เลือกแล้วเปิดเต็มสูงและเริ่มเนื้อหาจากบนสุด; footer = ปุ่มค้างนอกส่วนเลื่อน
+ * จอกว้าง: ไม่มีครึ่งจอ/เต็มสูง  กดหรือลากที่จับลง = ย่อเป็นการ์ดสรุปลอยมุมซ้ายล่าง | ลากการ์ดขึ้น = ขยาย
  */
 export function MapSheet({
   ref, children, header, summary, collapsed = false, onToggle, toolbar, className, label,
   peek = false, expandable = true, hideToolbarWhenFull = false, onFullChange, detailKey = null, footer,
 }) {
+  const wide = useWide();
   const dragged = useRef(false); // กันไม่ให้ click หลังลากเสร็จ toggle ซ้ำ
   const [offset, setOffset] = useState(0);
   const [scrolled, setScrolled] = useState(false);
@@ -51,19 +65,6 @@ export function MapSheet({
     onFullChangeRef.current?.(full);
   }, [full]);
 
-  // จอกว้างไม่มีที่จับให้ขยาย: ย่อค้างไว้จากมือถือแล้วขยายหน้าต่าง → กางแผงกลับเอง
-  const expandRef = useRef(null);
-  useEffect(() => {
-    expandRef.current = collapsed ? onToggle : null;
-  });
-  useEffect(() => {
-    const mq = window.matchMedia(WIDE);
-    const check = () => mq.matches && expandRef.current?.();
-    check();
-    mq.addEventListener('change', check);
-    return () => mq.removeEventListener('change', check);
-  }, []);
-
   // ลากได้ทั้งหัวแผ่น (ที่จับ + header) เริ่มกดแล้วติดตามการขยับทั้งหน้าต่าง นิ้วหลุดออกนอกหัวแผ่นก็ยังลากต่อได้
   // ไม่จับ pointer ไว้กับหัวแผ่น ปุ่มในหัว (เช่น "กลับ") จึงยังกดได้ตามปกติ
   function handlePointerDown(e) {
@@ -88,13 +89,13 @@ export function MapSheet({
       const dy = ev.clientY - startY;
       const up = dy <= -DRAG_THRESHOLD;
       const down = dy >= DRAG_THRESHOLD;
-      // ย่อ ↑ ครึ่งจอ ↑ เต็มสูง | เต็มสูง ↓ ครึ่งจอ ↓ ย่อ
+      // ย่อ ↑ ครึ่งจอ ↑ เต็มสูง | เต็มสูง ↓ ครึ่งจอ ↓ ย่อ  (จอกว้างมีแค่ ย่อ ↔ แผงเต็มสูง)
       if (collapsed) {
         if (up) onToggle();
-      } else if (full) {
+      } else if (full && !wide) {
         if (down) setFull(false);
       } else if (up) {
-        if (expandable) setFull(true);
+        if (expandable && !wide) setFull(true);
       } else if (down) {
         onToggle();
       }
@@ -118,7 +119,8 @@ export function MapSheet({
       className={cn(
         'pointer-events-none absolute inset-x-0 bottom-0 z-[500] flex flex-col',
         full ? 'max-h-[calc(100%-112px)]' : 'max-h-[50%]',
-        'lg:inset-x-auto lg:inset-y-0 lg:left-0 lg:max-h-none lg:w-[25.5rem]',
+        'md:inset-x-auto md:inset-y-0 md:left-0 md:max-h-none md:w-80 lg:w-[25.5rem]',
+        collapsed && 'md:justify-end',
         offset === 0 && 'transition-[transform,max-height] duration-200 ease-out motion-reduce:transition-none',
         className,
       )}
@@ -130,9 +132,9 @@ export function MapSheet({
         <div
           className={cn(
             'flex items-center justify-between px-3 pb-3 transition-[opacity,visibility] duration-200 motion-reduce:transition-none',
-            // จอกว้าง: ย้ายไปลอยมุมล่างของแผนที่ (การ์ดเคสซ้าย ปุ่มตำแหน่ง/โทรขวา) แบบปุ่มควบคุมของ Google Maps
-            'lg:pointer-events-auto lg:visible lg:absolute lg:bottom-6 lg:left-full lg:w-[calc(100vw-25.5rem-5.5rem)] lg:items-end lg:px-4 lg:pb-0 lg:opacity-100 lg:[&>a]:max-w-sm',
-            toolbarHidden ? 'hidden lg:flex' : 'pointer-events-auto',
+            // จอกว้าง: ย้ายไปลอยมุมขวาล่างของแผนที่ (การ์ดเคส + ปุ่มตำแหน่ง/โทร) แบบปุ่มควบคุมของ Google Maps
+            'md:pointer-events-auto md:visible md:absolute md:bottom-6 md:left-full md:w-[calc(100vw-20rem-5.5rem)] md:items-end md:justify-end md:gap-3 md:px-4 md:pb-0 md:opacity-100 md:[&>a]:max-w-sm md:[&>button]:max-w-sm lg:w-[calc(100vw-25.5rem-5.5rem)]',
+            toolbarHidden ? 'hidden md:flex' : 'pointer-events-auto',
           )}
         >
           {toolbar}
@@ -141,23 +143,30 @@ export function MapSheet({
       <section
         aria-label={label}
         className={cn(
-          'pointer-events-auto flex min-h-0 flex-col rounded-t-3xl bg-white shadow-sheet lg:rounded-none lg:border-r lg:border-line lg:shadow-[4px_0_12px_rgb(15_23_42/0.08)]',
-          !collapsed && 'lg:flex-1',
+          'pointer-events-auto flex min-h-0 flex-col rounded-t-3xl bg-white shadow-sheet',
+          // จอกว้าง: ขยาย = แผงซ้ายเต็มสูง | ย่อ = การ์ดสรุปลอยมุมซ้ายล่าง
+          collapsed
+            ? 'md:m-4 md:rounded-2xl md:shadow-float'
+            : 'md:flex-1 md:rounded-none md:border-r md:border-line md:shadow-[4px_0_12px_rgb(15_23_42/0.08)]',
           peek && !full && !collapsed && PEEK_HEIGHT,
         )}
       >
         {/* หัวแผ่น (ที่จับ + header) อยู่กับที่ เลื่อนเฉพาะเนื้อหาด้านล่าง มีเส้นคั่นเมื่อเนื้อหาเลื่อนลอดหัว */}
         <div
           onPointerDown={handlePointerDown}
-          className={cn('relative z-10 flex shrink-0 touch-none flex-col gap-3.5 rounded-t-3xl border-b bg-white px-4 pt-2 pb-3 select-none short:pb-2 lg:rounded-none short:gap-2.5 lg:pt-5', scrolled && !collapsed ? 'border-line' : 'border-transparent')}
+          className={cn(
+            'relative z-10 flex shrink-0 touch-none flex-col gap-3.5 rounded-t-3xl border-b bg-white px-4 pt-2 pb-3 select-none short:pb-2 short:gap-2.5',
+            collapsed ? 'md:rounded-t-2xl' : 'md:rounded-none',
+            scrolled && !collapsed ? 'border-line' : 'border-transparent',
+          )}
         >
           <button
             type="button"
             onClick={handleClick}
             aria-expanded={!collapsed}
             aria-controls={bodyId}
-            aria-label={collapsed ? 'ขยายแผ่นข้อมูล' : expandable ? 'ย่อแผ่นข้อมูล (ลากขึ้นเพื่อขยายเต็มจอ)' : 'ย่อแผ่นข้อมูล'}
-            className="-mt-2 -mb-4.5 flex cursor-grab lg:hidden touch-none justify-center pt-2 pb-3 active:cursor-grabbing"
+            aria-label={collapsed ? 'ขยายแผ่นข้อมูล' : expandable && !wide ? 'ย่อแผ่นข้อมูล (ลากขึ้นเพื่อขยายเต็มจอ)' : 'ย่อแผ่นข้อมูล'}
+            className="-mt-2 -mb-4.5 flex cursor-grab touch-none justify-center pt-2 pb-3 active:cursor-grabbing"
           >
             <span aria-hidden className="h-1 w-9 rounded-full bg-line2" />
           </button>
@@ -180,7 +189,7 @@ export function MapSheet({
           {collapsed ? summary : children}
         </div>
         {!collapsed && footer && (
-          <div className="shrink-0 border-t border-line bg-white px-4 pt-3 pb-10 lg:pb-4">
+          <div className="shrink-0 border-t border-line bg-white px-4 pt-3 pb-10 md:pb-4">
             {footer}
           </div>
         )}

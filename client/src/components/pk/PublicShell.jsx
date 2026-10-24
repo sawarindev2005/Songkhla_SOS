@@ -27,17 +27,17 @@ export function PublicShell({ children, className }) {
           ข้ามไปยังเนื้อหาหลัก
         </a>
         {/* มือถือ: แถบบน + เนื้อหา + แถบเมนูล่าง | จอกว้าง: แถบไอคอนซ้าย + เนื้อหาเต็มจอ (แบบ Google Maps) */}
-        <div className="mx-auto flex h-dvh max-w-120 flex-col bg-white sm:border-x sm:border-line lg:max-w-none lg:flex-row lg:border-x-0">
-          <SideRail items={tabs} center={PUBLIC_SOS} path={path} className="hidden lg:flex" />
+        <div className="mx-auto flex h-dvh max-w-120 flex-col bg-white sm:border-x sm:border-line md:max-w-none md:flex-row md:border-x-0">
+          <SideRail items={tabs} center={PUBLIC_SOS} path={path} className="hidden md:flex" />
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <div className="contents lg:hidden">
+            <div className="contents md:hidden">
               <PublicTopBar />
             </div>
             <NetBar online={online} />
             <main id="main" className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
               {children}
             </main>
-            <div className="contents lg:hidden">
+            <div className="contents md:hidden">
               <TabBar items={tabs} center={PUBLIC_SOS} path={path} />
             </div>
           </div>

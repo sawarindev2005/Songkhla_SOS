@@ -13,6 +13,7 @@ import { IconButton } from './IconButton';
 import { MapSheet, WIDE } from './MapSheet';
 import { MyCaseCard } from './MyCaseCard';
 import { NewsTicker } from './NewsTicker';
+import { cn } from './cn';
 import { HotlineFab } from './HotlineFab';
 import { DistributionPublicDetail, PlaceActions, ShelterPublicDetail } from './PublicDetail';
 import { SearchField } from './TextField';
@@ -137,8 +138,8 @@ export function PlaceList({ type }) {
       </div>
 
       {/* บนสุดของแผนที่: แถบข่าวสารจากศูนย์ แบบเดียวกับหน้าภาพรวม */}
-      <div ref={topRef} className="pointer-events-none absolute inset-x-0 top-0 z-[500] lg:left-[25.5rem] pt-3">
-        <NewsTicker items={announcements} updatedAt={updatedAt} loading={loading || other.loading} className="px-3" />
+      <div ref={topRef} className={cn('pointer-events-none absolute inset-x-0 top-0 z-[500] flex flex-col pt-3 md:items-end md:px-3', !collapsed && 'md:left-80 lg:left-[25.5rem]')}>
+        <NewsTicker items={announcements} updatedAt={updatedAt} loading={loading || other.loading} className="px-3 md:w-full md:max-w-lg md:px-0" />
       </div>
 
       <MapSheet
@@ -150,7 +151,7 @@ export function PlaceList({ type }) {
         // ดูรายละเอียดจุดแบบเต็มสูง → ซ่อนปุ่มลอยไม่ให้บังหมุด | รายการเต็มสูงยังเห็นปุ่ม ◎ ไว้เรียงจากใกล้สุด
         hideToolbarWhenFull={!!selected}
         collapsed={collapsed}
-        onToggle={() => setCollapsed((c) => !c)}
+        onToggle={() => setCollapsed(!collapsed)}
         toolbar={
           <>
             {latestCase ? (

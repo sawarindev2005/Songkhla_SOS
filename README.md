@@ -25,21 +25,18 @@
 **1. สร้างฐานข้อมูล** — เปิด MySQL Workbench → File › Open SQL Script → `server/sql/schema.sql` → กด Execute (⚡)
 (สคริปต์จะ `DROP DATABASE hatyai_floods` แล้วสร้างใหม่พร้อมข้อมูลตัวอย่าง)
 
-**2. รัน API**
+**2. ตั้งค่า env** (ครั้งแรกครั้งเดียว)
 ```bash
-cd server
-cp .env.example .env      # แก้ DB_PASSWORD และ JWT_SECRET
-npm install
-npm run dev               # http://localhost:4000/api
+cp server/.env.example server/.env              # แก้ DB_PASSWORD และ JWT_SECRET
+cp client/.env.local.example client/.env.local
 ```
 
-**3. รันเว็บ** (เปิดอีก terminal)
+**3. ติดตั้งและรัน** (ที่โฟลเดอร์บนสุดของโปรเจกต์)
 ```bash
-cd client
-cp .env.local.example .env.local
-npm install
-npm run dev               # http://localhost:3000
+npm run install-all   # ติดตั้งแพ็กเกจทั้ง root, server, client (ทำใหม่ทุกครั้งหลัง pull)
+npm run dev           # รัน API (http://localhost:4000/api) + เว็บ (http://localhost:3000) พร้อมกัน
 ```
+log ของสองฝั่งขึ้นใน terminal เดียว มีป้าย `[server]` / `[client]` กำกับ · กด Ctrl+C ครั้งเดียวปิดทั้งคู่
 
 ## บัญชีตัวอย่าง
 

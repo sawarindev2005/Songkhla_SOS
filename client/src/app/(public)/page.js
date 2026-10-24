@@ -221,15 +221,15 @@ export default function HomePage() {
       </div>
 
       {/* บนสุดของแผนที่: แถบข่าวสารจากศูนย์ (เลื่อนเอง ไม่ต้องกดดู) แล้วตามด้วยปุ่มชั้นข้อมูล */}
-      <div ref={topRef} className="pointer-events-none absolute inset-x-0 top-0 z-[500] lg:left-[25.5rem] flex flex-col pt-3">
+      <div ref={topRef} className={cn('pointer-events-none absolute inset-x-0 top-0 z-[500] flex flex-col pt-3 md:items-end md:px-3', !collapsed && 'md:left-80 lg:left-[25.5rem]')}>
         <NewsTicker
           items={announcements}
           updatedAt={shelters.updatedAt}
           loading={shelters.loading || distributions.loading}
-          className="px-3"
+          className="px-3 md:w-full md:max-w-lg md:px-0"
         />
         {/* ดูรายละเอียดบนมือถือ: เว้นแถบแผนที่ให้เห็นหมุดใต้ข่าวสาร; กลับจากรายละเอียดแล้วแสดงตัวกรองตามเดิม */}
-        <ChipRow label="ชั้นข้อมูลบนแผนที่" className={cn('pointer-events-auto px-3 py-2.5', selectedItem && 'hidden lg:flex')}>
+        <ChipRow label="ชั้นข้อมูลบนแผนที่" className={cn('pointer-events-auto px-3 py-2.5 md:max-w-full md:px-0', selectedItem && 'hidden md:flex')}>
           {LAYERS.map((l) => (
             <Chip
               key={l.key}
@@ -258,7 +258,7 @@ export default function HomePage() {
         // ลากแผ่นลงจากเต็มสูง หรือย่อแผ่น → รายการคำขอกลับเป็น 3 เคส
         onFullChange={(f) => !f && setShowAllCases(false)}
         collapsed={collapsed}
-        onToggle={() => setCollapsed((c) => !c)}
+        onToggle={() => setCollapsed(!collapsed)}
         toolbar={toolbar}
         summary={
           <p className="flex items-baseline justify-between gap-3 pb-1">

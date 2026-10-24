@@ -150,7 +150,7 @@ export default function RequestPage() {
   if (result) return <Success caseNo={result.case_no} />;
 
   return (
-    <form onSubmit={submit} noValidate className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 pt-5 pb-8 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:content-start lg:gap-x-8 lg:gap-y-5 lg:px-[max(2.5rem,calc(50%-34rem))] lg:pt-8 lg:pb-8 lg:[@media(max-height:820px)]:gap-y-3 lg:[@media(max-height:820px)]:pt-4 lg:[@media(max-height:820px)]:pb-4">
+    <form onSubmit={submit} noValidate className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 pt-5 pb-8 md:px-[max(1.5rem,calc(50%-20rem))] lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:content-start lg:gap-x-8 lg:gap-y-5 lg:px-[max(2.5rem,calc(50%-34rem))] lg:pt-8 lg:pb-8 lg:[@media(max-height:820px)]:gap-y-3 lg:[@media(max-height:820px)]:pt-4 lg:[@media(max-height:820px)]:pb-4">
       <header className="flex flex-col gap-1 lg:col-span-2 lg:flex-row lg:items-baseline lg:gap-4">
         <h1 className="flex items-center gap-2 text-7xl font-bold lg:shrink-0 lg:text-4xl">
           <SirenIcon size={28} weight="fill" className="text-red" aria-hidden />

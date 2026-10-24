@@ -57,7 +57,7 @@ export default function TrackPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 pt-5 pb-8">
+    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 pt-5 pb-8 md:px-[max(1.5rem,calc((100%-40rem)/2))] md:pt-8">
       <header className="flex flex-col gap-1">
         <h1 className="text-7xl font-bold">เคสของฉัน</h1>
         <p className="font-body text-md text-t2">กรอกเลขเคสที่ได้รับหลังส่งคำขอ เช่น HY-00157</p>

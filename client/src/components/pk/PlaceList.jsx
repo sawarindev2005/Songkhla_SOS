@@ -10,7 +10,7 @@ import { CaretLeftIcon, CircleNotchIcon, CrosshairIcon, HouseLineIcon, Magnifyin
 import { PlaceRow } from './CaseCard';
 import { EmptyState } from './EmptyState';
 import { IconButton } from './IconButton';
-import { MapSheet } from './MapSheet';
+import { MapSheet, mapArea, isWide } from './MapSheet';
 import { MyCaseCard } from './MyCaseCard';
 import { NewsTicker } from './NewsTicker';
 import { HotlineFab } from './HotlineFab';
@@ -88,7 +88,7 @@ export function PlaceList({ type }) {
 
   // ความสูงของแผ่นข้อมูลที่บังแผนที่ ใช้วางจุดที่เลือกไว้กลางพื้นที่ที่ยังมองเห็น
   const sheetRef = useRef(null);
-  const coverBottom = () => sheetRef.current?.offsetHeight ?? 0;
+  const coverBottom = () => (isWide() ? 0 : sheetRef.current?.offsetHeight ?? 0);
   // ความสูงที่แถบข่าวสารบังด้านบน
   const topRef = useRef(null);
   const coverTop = () => topRef.current?.offsetHeight ?? 0;
@@ -122,13 +122,13 @@ export function PlaceList({ type }) {
 
   return (
     <>
-      <div className="absolute inset-0 isolate">
+      <div className={`absolute inset-0 isolate ${mapArea(collapsed)}`}>
         <MapView
           pinStyle="public"
           {...{ [cfg.mapProp]: places }}
           selected={selectedId != null ? { type, id: selectedId } : null}
           onSelect={(_, p) => choose(p)}
-          onMapClick={() => setCollapsed(true)}
+          onMapClick={() => !isWide() && setCollapsed(true)}
           focus={focus}
           me={me}
           locate={false}
@@ -136,8 +136,8 @@ export function PlaceList({ type }) {
       </div>
 
       {/* บนสุดของแผนที่: แถบข่าวสารจากศูนย์ แบบเดียวกับหน้าภาพรวม */}
-      <div ref={topRef} className="pointer-events-none absolute inset-x-0 top-0 z-[500] pt-3">
-        <NewsTicker items={announcements} updatedAt={updatedAt} loading={loading || other.loading} className="px-3" />
+      <div ref={topRef} className={`pointer-events-none absolute inset-x-0 top-0 z-[500] flex flex-col pt-3 md:items-end md:px-4 md:pt-4 ${mapArea(collapsed)}`}>
+        <NewsTicker items={announcements} updatedAt={updatedAt} loading={loading || other.loading} className="px-3 md:w-full md:max-w-lg md:px-0" />
       </div>
 
       <MapSheet

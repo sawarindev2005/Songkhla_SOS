@@ -1,12 +1,31 @@
 'use client';
 import { useEffect, useId, useRef, useState } from 'react';
+import { CaretLeftIcon, CaretRightIcon } from './icons';
 import { cn } from './cn';
+
+// ตั้งแต่ md (แท็บเล็ตขึ้นไป) แผ่นข้อมูลเปลี่ยนจาก bottom sheet เป็นแผงด้านซ้ายความสูงเต็ม
+const WIDE_QUERY = '(min-width: 768px)';
+// พื้นที่แผนที่บนจอกว้าง = ถัดจากแผงข้าง (ความกว้างต้องตรงกับ md:w-90 lg:w-100 ของแผง) | ปิดแผงอยู่ = เต็มกว้าง
+export const mapArea = (closed) => (closed ? '' : 'md:left-90 lg:left-100');
+export const isWide = () => typeof window !== 'undefined' && window.matchMedia(WIDE_QUERY).matches;
+
+function useWide() {
+  const [wide, setWide] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(WIDE_QUERY);
+    const sync = () => setWide(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+  return wide;
+}
 
 // ระยะลาก (px) ที่ต้องเกินก่อนจะย่อ/ขยายแผ่น ถ้าน้อยกว่านี้จะเด้งกลับที่เดิม
 const DRAG_THRESHOLD = 48;
 // ความสูงแผ่นตอนครึ่งจอแบบ peek = เท่ากับแผ่นหน้าภาพรวม (ที่จับ + หัวข้อ + ตัวเลข 3 ช่อง) วัดจากจอจริง
 // แก้หัวหรือตัวเลขหน้าภาพรวมแล้วความสูงเปลี่ยน ต้องวัดใหม่ให้สองหน้ายังเท่ากัน
-const PEEK_HEIGHT = 'h-[167px] short:h-[156px]';
+const PEEK_HEIGHT = 'max-md:h-[167px] max-md:short:h-[156px]';
 
 /**
  * แผ่นข้อมูลด้านล่างแผนที่ 3 ระดับ: ย่อ (แถวสรุป) → ครึ่งจอ (ค่าเริ่มต้นเมื่อขยาย ยังเห็นแผนที่) → เต็มสูง
@@ -16,11 +35,17 @@ const PEEK_HEIGHT = 'h-[167px] short:h-[156px]';
  * expandable = false → มีแค่ ย่อ / ครึ่งจอ ลากขึ้นหรือเลื่อนแล้วไม่ขยายเต็มสูง
  * hideToolbarWhenFull = ซ่อนปุ่มลอยตอนขยายเต็มสูง (เช่น ตอนดูรายละเอียดจุด ไม่ให้บังหมุดที่เลือก)
  * onFullChange(full) = แจ้งเมื่อแผ่นเข้า/ออกจากเต็มสูง (รวมตอนย่อแผ่น) เช่น ใช้ย่อรายการกลับตอนลากแผ่นลง
+ * md+ = แผงข้างซ้ายเต็มสูง ไม่มีครึ่งจอ/เต็มสูง  collapsed = ซ่อนแผง เปิด/ปิดด้วยปุ่มแท็บที่ขอบแผง
  */
 export function MapSheet({
-  ref, children, header, summary, collapsed = false, onToggle, toolbar, className, label,
+  ref, children, header, summary, collapsed: collapsedProp = false, onToggle: onToggleProp, toolbar, className, label,
   peek = false, expandable = true, hideToolbarWhenFull = false, onFullChange,
 }) {
+  const wide = useWide();
+  // collapsed = ย่อเป็นแถวสรุป (มือถือ) | sideClosed = ซ่อนแผงข้าง (md+) ไม่ลาก ใช้ปุ่มแท็บแทน
+  const collapsed = collapsedProp && !wide;
+  const sideClosed = collapsedProp && wide;
+  const onToggle = wide ? undefined : onToggleProp;
   const dragged = useRef(false); // กันไม่ให้ click หลังลากเสร็จ toggle ซ้ำ
   const [offset, setOffset] = useState(0);
   const [scrolled, setScrolled] = useState(false);
@@ -30,7 +55,7 @@ export function MapSheet({
   if (collapsed && full) setFull(false);
   // เลิกให้ขยาย (เช่น กลับจากรายละเอียดไปหน้าสรุป) → ลดกลับครึ่งจอ
   if (!expandable && full) setFull(false);
-  const toolbarHidden = full && hideToolbarWhenFull;
+  const toolbarHidden = full && hideToolbarWhenFull && !wide;
 
   // แจ้งออกไปเฉพาะตอนระดับเปลี่ยนจริง (เก็บ callback ล่าสุดไว้ใน ref ไม่ให้ทำงานซ้ำทุก render)
   const onFullChangeRef = useRef(onFullChange);
@@ -95,6 +120,8 @@ export function MapSheet({
       className={cn(
         'pointer-events-none absolute inset-x-0 bottom-0 z-[500] flex flex-col',
         full ? 'max-h-[calc(100%-112px)]' : 'max-h-[50%]',
+        // md+: แผงข้างซ้ายเต็มสูง (แผนที่เริ่มถัดจากแผง ดู MAP_AREA) การ์ดเคสของฉัน + ปุ่มลอยอยู่มุมขวาล่างของแผนที่
+        'md:inset-0 md:max-h-none',
         offset === 0 && 'transition-[transform,max-height] duration-200 ease-out motion-reduce:transition-none',
         className,
       )}
@@ -106,7 +133,7 @@ export function MapSheet({
         <div
           aria-hidden={toolbarHidden || undefined}
           className={cn(
-            'flex items-center justify-between px-3 pb-3 transition-[opacity,visibility] duration-200 motion-reduce:transition-none',
+            'flex items-center justify-between px-3 pb-3 md:absolute md:right-4 md:bottom-6 md:justify-end md:px-0 md:pb-0 transition-[opacity,visibility] duration-200 motion-reduce:transition-none',
             toolbarHidden ? 'invisible opacity-0' : 'pointer-events-auto',
           )}
         >
@@ -115,12 +142,17 @@ export function MapSheet({
       )}
       <section
         aria-label={label}
-        className={cn('pointer-events-auto flex min-h-0 flex-col rounded-t-3xl bg-white shadow-sheet', peek && !full && !collapsed && PEEK_HEIGHT)}
+        className={cn(
+          'pointer-events-auto flex min-h-0 flex-col rounded-t-3xl bg-white shadow-sheet md:absolute md:inset-y-0 md:left-0 md:w-90 md:rounded-none md:border-r md:border-line md:shadow-none lg:w-100',
+          peek && !full && !collapsed && PEEK_HEIGHT,
+          'md:transition-[translate,visibility] md:duration-200 md:ease-out motion-reduce:transition-none',
+          sideClosed && 'md:invisible md:-translate-x-full',
+        )}
       >
         {/* หัวแผ่น (ที่จับ + header) อยู่กับที่ เลื่อนเฉพาะเนื้อหาด้านล่าง มีเส้นคั่นเมื่อเนื้อหาเลื่อนลอดหัว */}
         <div
           onPointerDown={handlePointerDown}
-          className={cn('flex shrink-0 touch-none flex-col gap-3.5 border-b px-4 pt-2 select-none short:gap-2.5', scrolled && !collapsed ? 'border-line' : 'border-transparent')}
+          className={cn('flex shrink-0 touch-none flex-col gap-3.5 border-b px-4 pt-2 select-none md:px-5 md:pt-5 short:gap-2.5', scrolled && !collapsed ? 'border-line' : 'border-transparent')}
         >
           <button
             type="button"
@@ -128,7 +160,7 @@ export function MapSheet({
             aria-expanded={!collapsed}
             aria-controls={bodyId}
             aria-label={collapsed ? 'ขยายแผ่นข้อมูล' : expandable ? 'ย่อแผ่นข้อมูล (ลากขึ้นเพื่อขยายเต็มจอ)' : 'ย่อแผ่นข้อมูล'}
-            className="-mt-2 -mb-4.5 flex cursor-grab touch-none justify-center pt-2 pb-3 active:cursor-grabbing"
+            className="-mt-2 -mb-4.5 flex cursor-grab md:hidden touch-none justify-center pt-2 pb-3 active:cursor-grabbing"
           >
             <span aria-hidden className="h-1 w-9 rounded-full bg-line2" />
           </button>
@@ -146,11 +178,29 @@ export function MapSheet({
             if (top > 0 && expandable && !full && !collapsed) setFull(true);
           }}
           onClick={collapsed ? onToggle : undefined}
-          className={cn('flex min-h-0 flex-col gap-3.5 overflow-y-auto px-4 pt-3.5 short:gap-2.5 short:pt-2.5 [&>*]:shrink-0', collapsed ? 'cursor-pointer pb-4' : 'pb-10')}
+          className={cn('flex min-h-0 flex-col gap-3.5 overflow-y-auto px-4 pt-3.5 md:px-5 short:gap-2.5 short:pt-2.5 [&>*]:shrink-0', collapsed ? 'cursor-pointer pb-4' : 'pb-10')}
         >
           {collapsed ? summary : children}
         </div>
       </section>
+      {/* md+: แท็บที่ขอบขวาของแผง เปิด/ปิดแผงข้าง ปิดแล้วแท็บอยู่ขอบซ้ายของจอ */}
+      {onToggleProp && (
+        <button
+          type="button"
+          onClick={onToggleProp}
+          aria-expanded={!sideClosed}
+          aria-controls={bodyId}
+          aria-label={sideClosed ? `แสดง${label ?? 'แผงข้อมูล'}` : `ซ่อน${label ?? 'แผงข้อมูล'}`}
+          title={sideClosed ? 'แสดงแผง' : 'ซ่อนแผง'}
+          className={cn(
+            'pointer-events-auto absolute top-1/2 hidden h-12 w-6 -translate-y-1/2 place-items-center rounded-r-lg border border-l-0 border-line bg-white text-t2 shadow-float hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acc md:grid',
+            'transition-[left] duration-200 ease-out motion-reduce:transition-none',
+            sideClosed ? 'left-0' : 'left-90 lg:left-100',
+          )}
+        >
+          {sideClosed ? <CaretRightIcon size={16} weight="bold" aria-hidden /> : <CaretLeftIcon size={16} weight="bold" aria-hidden />}
+        </button>
+      )}
     </div>
   );
 }

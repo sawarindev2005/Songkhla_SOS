@@ -9,7 +9,7 @@ import { buildAnnouncements } from '@/lib/announcements';
 import { Chip, ChipRow } from '@/components/pk/Chip';
 import { HotlineFab } from '@/components/pk/HotlineFab';
 import { IconButton } from '@/components/pk/IconButton';
-import { MapSheet } from '@/components/pk/MapSheet';
+import { MapSheet, mapArea, isWide } from '@/components/pk/MapSheet';
 import { MyCaseCard } from '@/components/pk/MyCaseCard';
 import { NewsTicker } from '@/components/pk/NewsTicker';
 import { DistributionPublicDetail, RequestPublicDetail, ShelterPublicDetail } from '@/components/pk/PublicDetail';
@@ -104,7 +104,7 @@ export default function HomePage() {
 
   // ความสูงของแผ่นข้อมูลที่บังแผนที่ ใช้วางจุดที่เลือกไว้กลางพื้นที่ที่ยังมองเห็น
   const sheetRef = useRef(null);
-  const coverBottom = () => sheetRef.current?.offsetHeight ?? 0;
+  const coverBottom = () => (isWide() ? 0 : sheetRef.current?.offsetHeight ?? 0);
   // ความสูงที่แถบข่าวสาร + แถวชิปบังด้านบน
   const topRef = useRef(null);
   const coverTop = () => topRef.current?.offsetHeight ?? 0;
@@ -194,7 +194,7 @@ export default function HomePage() {
   return (
     <>
       <h1 className="sr-only">แผนที่สถานการณ์น้ำท่วม อำเภอหาดใหญ่</h1>
-      <div className="absolute inset-0 isolate">
+      <div className={`absolute inset-0 isolate ${mapArea(collapsed)}`}>
         <MapView
           pinStyle="public"
           requests={data.requests}
@@ -205,7 +205,7 @@ export default function HomePage() {
           show={show}
           selected={selected}
           onSelect={handleSelect}
-          onMapClick={() => setCollapsed(true)}
+          onMapClick={() => !isWide() && setCollapsed(true)}
           focus={focus}
           me={me}
           locate={false}
@@ -213,14 +213,14 @@ export default function HomePage() {
       </div>
 
       {/* บนสุดของแผนที่: แถบข่าวสารจากศูนย์ (เลื่อนเอง ไม่ต้องกดดู) แล้วตามด้วยปุ่มชั้นข้อมูล */}
-      <div ref={topRef} className="pointer-events-none absolute inset-x-0 top-0 z-[500] flex flex-col pt-3">
+      <div ref={topRef} className={`pointer-events-none absolute inset-x-0 top-0 z-[500] flex flex-col pt-3 md:items-end md:px-4 md:pt-4 ${mapArea(collapsed)}`}>
         <NewsTicker
           items={announcements}
           updatedAt={shelters.updatedAt}
           loading={shelters.loading || distributions.loading}
-          className="px-3"
+          className="px-3 md:w-full md:max-w-lg md:px-0"
         />
-        <ChipRow label="ชั้นข้อมูลบนแผนที่" className="pointer-events-auto px-3 py-2.5">
+        <ChipRow label="ชั้นข้อมูลบนแผนที่" className="pointer-events-auto px-3 py-2.5 md:max-w-full md:px-0">
           {LAYERS.map((l) => (
             <Chip
               key={l.key}

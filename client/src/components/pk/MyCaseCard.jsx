@@ -12,7 +12,7 @@ import { CaseStatusBadge, UrgencyBadge } from './domain';
  */
 export function MyCaseCard({ data, more = 0, href, onSelect, className }) {
   const cls = cn(
-    'mr-2 flex min-w-0 flex-1 items-center gap-3 rounded-2xl bg-white px-3.5 py-2.5 text-left text-ink no-underline shadow-float focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acc',
+    'mr-2 flex min-w-0 flex-1 items-center gap-3 rounded-2xl bg-white px-3.5 py-2.5 text-left text-ink no-underline shadow-float md:w-96 md:flex-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acc',
     className,
   );
   const body = (

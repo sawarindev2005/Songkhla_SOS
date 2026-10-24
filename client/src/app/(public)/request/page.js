@@ -134,7 +134,7 @@ export default function RequestPage() {
   if (result) return <Success caseNo={result.case_no} />;
 
   return (
-    <form onSubmit={submit} noValidate className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 pt-5 pb-8">
+    <form onSubmit={submit} noValidate className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 pt-5 pb-8 md:px-[max(1.5rem,calc((100%-40rem)/2))] md:pt-8">
       <header className="flex flex-col gap-1">
         <h1 className="flex items-center gap-2 text-7xl font-bold">
           <SirenIcon size={28} weight="fill" className="text-red" aria-hidden />
@@ -354,7 +354,7 @@ function Success({ caseNo }) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-center gap-5 overflow-y-auto px-4 py-8 text-center">
+    <div className="flex min-h-0 flex-1 flex-col items-center gap-5 overflow-y-auto px-4 py-8 text-center md:px-[max(1.5rem,calc((100%-40rem)/2))] md:pt-8">
       <CheckCircleIcon size={56} weight="fill" className="text-ok" aria-hidden />
       <div className="flex flex-col gap-1">
         <h1 className="text-7xl font-bold">ส่งคำขอแล้ว</h1>

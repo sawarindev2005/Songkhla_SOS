@@ -31,10 +31,11 @@ export function PlacePin({ kind, active = true, big = false }) {
   );
 }
 
-export function TeamPin() {
+/** big = ทีมที่กำลังดู หรือหมุดตำแหน่งตัวเองตอนกู้ภัยลากปักเอง */
+export function TeamPin({ big = false }) {
   return (
-    <span className={cn(base, 'size-7.5 rounded-full bg-ink shadow-pin')}>
-      <LifebuoyIcon size={16} weight="fill" aria-hidden />
+    <span className={cn(base, 'rounded-full bg-ink', big ? 'size-10 shadow-halo-amb' : 'size-7.5 shadow-pin')}>
+      <LifebuoyIcon size={big ? 20 : 16} weight="fill" aria-hidden />
     </span>
   );
 }

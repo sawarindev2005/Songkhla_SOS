@@ -1,17 +1,25 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, ClipboardList, Crosshair, Hand, LifeBuoy, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { MapView } from '@/components/map';
 import { ContactActions, RequestDetail } from '@/components/Details';
-import { Button, ErrorBanner, UrgencyBadge, cx } from '@/components/ui';
+import { Button } from '@/components/pk/Button';
+import { ErrorBanner } from '@/components/pk/ErrorBanner';
+import { UrgencyBadge } from '@/components/pk/domain';
+import {
+  CaretLeftIcon, CaretRightIcon, ClipboardTextIcon, CrosshairIcon, HandTapIcon, LifebuoyIcon, XIcon,
+} from '@/components/pk/icons';
+import { cn } from '@/components/pk/cn';
 import { usePolling } from '@/hooks/usePolling';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { distanceKm, formatDistance, timeAgo, vulnerableLabels } from '@/lib/format';
 
 export default function RescuerMapPage() {
+  const router = useRouter();
+  const mounted = useRef(false);
   const { user, updateUser } = useAuth();
   const requests = usePolling('/requests?status=active');
   const shelters = usePolling('/shelters');
@@ -25,6 +33,11 @@ export default function RescuerMapPage() {
   const [accepting, setAccepting] = useState(false);
   const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   const myPos = user?.current_lat != null ? { lat: user.current_lat, lng: user.current_lng } : null;
   const all = requests.data || [];
@@ -86,13 +99,15 @@ export default function RescuerMapPage() {
     setError(null);
     try {
       await api(`/requests/${r.id}/accept`, { method: 'PATCH' });
-      setMessage(`รับเคส ${r.case_no} แล้ว ดูรายละเอียดในหน้าภารกิจ`);
-      await requests.refresh();
+      if (!mounted.current) return;
+      setSelectedId(null);
+      router.push('/rescuer/missions');
     } catch (err) {
+      if (!mounted.current) return;
       setError(err);
       requests.refresh();
     } finally {
-      setAccepting(false);
+      if (mounted.current) setAccepting(false);
     }
   }
 
@@ -114,7 +129,7 @@ export default function RescuerMapPage() {
           onSelect={(type, item) => type === 'request' && choose(item)}
           focus={focus}
           me={!pinMode && myPos ? { ...myPos, label: 'ฉัน' } : null}
-          picker={pinMode ? { value: draft, onChange: setDraft, icon: LifeBuoy, color: '#0f172a' } : undefined}
+          picker={pinMode ? { value: draft, onChange: setDraft, kind: 'team' } : undefined}
           onLocate={pinMode ? setDraft : undefined}
           locateClassName="bottom-8 md:bottom-4"
         />
@@ -122,9 +137,9 @@ export default function RescuerMapPage() {
         {/* แถบด้านบน: ตำแหน่งของฉัน */}
         <div className="absolute inset-x-3 top-3 z-[600] md:left-[25.5rem] md:right-auto md:w-96">
           {pinMode ? (
-            <div className="flex flex-col gap-2 rounded-2xl bg-ink p-3 text-white shadow-xl">
-              <p className="flex items-center gap-2 text-sm font-semibold">
-                <Hand className="size-4" aria-hidden />
+            <div className="flex flex-col gap-2 rounded-xl bg-ink p-3 text-white shadow-float">
+              <p className="flex items-center gap-2 text-base font-semibold">
+                <HandTapIcon size={18} weight="bold" aria-hidden />
                 แตะบนแผนที่หรือลากหมุดไปยังตำแหน่งของคุณ
               </p>
               <div className="flex gap-2">
@@ -141,6 +156,7 @@ export default function RescuerMapPage() {
                 <Button
                   variant="outline"
                   size="sm"
+                  block={false}
                   onClick={() => {
                     setPinMode(false);
                     setDraft(null);
@@ -151,23 +167,30 @@ export default function RescuerMapPage() {
               </div>
             </div>
           ) : (
-            <div className="flex items-center gap-2 rounded-2xl bg-surface p-2 pl-3 shadow-[var(--shadow-float)]">
+            <div className="flex items-center gap-2 rounded-xl bg-white p-2 pl-3 shadow-float">
               <span className="grid size-9 shrink-0 place-items-center rounded-full bg-ink text-white">
-                <LifeBuoy className="size-4" aria-hidden />
+                <LifebuoyIcon size={18} weight="fill" aria-hidden />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold">{user?.team_name || user?.full_name}</p>
-                <p className="truncate text-xs text-muted">
+                <p className="truncate text-base font-bold">{user?.team_name || user?.full_name}</p>
+                <p className="truncate text-xs text-t2">
                   {myPos ? `ตำแหน่งอัปเดต ${timeAgo(user.location_updated_at)}` : 'ยังไม่ได้มาร์คตำแหน่ง'}
                 </p>
               </div>
-              <Button size="sm" variant="safety" onClick={updateFromGps} loading={locating || saving} aria-label="อัปเดตตำแหน่งด้วย GPS">
-                {!(locating || saving) && <Crosshair className="size-4" aria-hidden />}
+              <Button
+                size="sm"
+                block={false}
+                onClick={updateFromGps}
+                loading={locating || saving}
+                aria-label="อัปเดตตำแหน่งด้วย GPS"
+                icon={<CrosshairIcon size={18} weight="bold" aria-hidden />}
+              >
                 GPS
               </Button>
               <Button
                 size="sm"
                 variant="outline"
+                block={false}
                 onClick={() => {
                   setPinMode(true);
                   setDraft(myPos);
@@ -183,14 +206,14 @@ export default function RescuerMapPage() {
 
       <section
         aria-label="รายการเคส"
-        className="relative z-[700] -mt-4 flex max-h-[48dvh] shrink-0 flex-col overflow-hidden rounded-t-3xl bg-surface shadow-[var(--shadow-sheet)] md:absolute md:bottom-4 md:left-4 md:top-4 md:mt-0 md:max-h-none md:w-96 md:rounded-3xl md:shadow-xl"
+        className="relative z-[700] -mt-4 flex max-h-[48dvh] shrink-0 flex-col overflow-hidden rounded-t-2xl bg-white shadow-sheet md:absolute md:bottom-4 md:left-4 md:top-4 md:mt-0 md:max-h-none md:w-96 md:rounded-xl md:shadow-float"
       >
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-4">
           {message && (
-            <div role="status" className="mb-3 flex items-start gap-2 rounded-xl bg-shelter-soft p-3 text-sm text-shelter">
+            <div role="status" className="mb-3 flex items-start gap-2 rounded-lg border border-ok-line bg-ok-bg p-3 text-base text-ok">
               <p className="flex-1">{message}</p>
-              <button onClick={() => setMessage(null)} aria-label="ปิดข้อความ" className="cursor-pointer">
-                <X className="size-4" aria-hidden />
+              <button type="button" onClick={() => setMessage(null)} aria-label="ปิดข้อความ" className="grid size-11 shrink-0 cursor-pointer place-items-center">
+                <XIcon size={18} aria-hidden />
               </button>
             </div>
           )}
@@ -201,11 +224,11 @@ export default function RescuerMapPage() {
           {mine.length > 0 && !selected && (
             <Link
               href="/rescuer/missions"
-              className="mb-4 flex items-center gap-3 rounded-2xl border border-safety/40 bg-safety-soft p-3 hover:bg-blue-100"
+              className="mb-4 flex items-center gap-3 rounded-lg border border-acc-line bg-acc-bg p-3 text-acc-tx"
             >
-              <ClipboardList className="size-5 text-safety-dark" aria-hidden />
+              <ClipboardTextIcon size={20} weight="fill" className="text-acc" aria-hidden />
               <span className="flex-1 font-semibold">ภารกิจที่กำลังดำเนินการ {mine.length} เคส</span>
-              <ChevronRight className="size-5 text-safety-dark" aria-hidden />
+              <CaretRightIcon size={20} className="text-acc" aria-hidden />
             </Link>
           )}
 
@@ -214,22 +237,20 @@ export default function RescuerMapPage() {
               <button
                 type="button"
                 onClick={() => setSelectedId(null)}
-                className="-ml-2 flex min-h-10 w-fit cursor-pointer items-center gap-1 rounded-lg px-2 text-sm font-semibold text-safety-dark hover:bg-safety-soft"
+                className="-ml-2 flex min-h-11 w-fit cursor-pointer items-center gap-1 rounded-lg px-2 text-base font-semibold text-acc hover:bg-acc-bg"
               >
-                <ChevronLeft className="size-4" aria-hidden />
+                <CaretLeftIcon size={18} aria-hidden />
                 กลับไปรายการ
               </button>
               <RequestDetail request={selected} distance={distanceKm(myPos, selected)} showPrivate />
               {selected.status === 'pending' ? (
-                <Button size="lg" onClick={() => accept(selected)} loading={accepting}>
+                <Button onClick={() => accept(selected)} loading={accepting}>
                   รับเคสนี้
                 </Button>
               ) : selected.assigned_to === user?.id ? (
-                <Button as={Link} href="/rescuer/missions" variant="safety" size="lg">
-                  ไปที่ภารกิจของฉัน
-                </Button>
+                <Button href="/rescuer/missions">ไปที่ภารกิจของฉัน</Button>
               ) : (
-                <p className="rounded-xl bg-slate-100 p-3 text-sm text-muted">
+                <p className="rounded-lg bg-s2 p-3 text-base text-t2">
                   เคสนี้มีทีม {selected.rescuer_team || ''} รับผิดชอบแล้ว
                 </p>
               )}
@@ -237,12 +258,12 @@ export default function RescuerMapPage() {
             </div>
           ) : (
             <>
-              <h2 className="mb-1 text-lg font-bold">เคสรอความช่วยเหลือ ({pending.length})</h2>
-              <p className="mb-2 text-sm text-muted">
+              <h2 className="mb-1 text-2xl font-bold">เคสรอความช่วยเหลือ ({pending.length})</h2>
+              <p className="mb-2 text-base text-t2">
                 {myPos ? 'เรียงจากใกล้ตำแหน่งของคุณที่สุด' : 'มาร์คตำแหน่งเพื่อเรียงเคสตามระยะทาง'}
               </p>
               {pending.length === 0 && !requests.loading && (
-                <p className="py-6 text-center text-sm text-muted">ไม่มีเคสที่รอความช่วยเหลือ</p>
+                <p className="py-6 text-center text-base text-t2">ไม่มีเคสที่รอความช่วยเหลือ</p>
               )}
               <ul className="divide-y divide-line">
                 {pending.map((r) => (
@@ -250,25 +271,25 @@ export default function RescuerMapPage() {
                     <button
                       type="button"
                       onClick={() => choose(r)}
-                      className="flex w-full cursor-pointer items-center gap-3 py-3 text-left hover:bg-slate-50"
+                      className="flex w-full cursor-pointer items-center gap-3 py-3 text-left hover:bg-s1"
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="tabular font-bold">{r.case_no}</span>
+                          <span className="tabular-nums font-bold">{r.case_no}</span>
                           <UrgencyBadge urgency={r.urgency} />
                         </div>
-                        <p className="truncate text-sm text-muted">
+                        <p className="truncate text-base text-t2">
                           {r.people_count} คน
                           {vulnerableLabels(r).length > 0 && ` · ${vulnerableLabels(r).join(', ')}`} ·{' '}
                           {timeAgo(r.created_at)}
                         </p>
                       </div>
                       {r.distance != null && (
-                        <span className={cx('tabular shrink-0 text-sm font-semibold', r.distance < 2 ? 'text-shelter' : 'text-muted')}>
+                        <span className={cn('tabular-nums shrink-0 text-base font-semibold', r.distance < 2 ? 'text-ok' : 'text-t2')}>
                           {formatDistance(r.distance)}
                         </span>
                       )}
-                      <ChevronRight className="size-4 shrink-0 text-slate-400" aria-hidden />
+                      <CaretRightIcon size={18} className="shrink-0 text-t4" aria-hidden />
                     </button>
                   </li>
                 ))}

@@ -1,13 +1,20 @@
-import { Noto_Sans_Thai } from 'next/font/google';
+import { IBM_Plex_Sans_Thai, IBM_Plex_Sans_Thai_Looped } from 'next/font/google';
 import 'leaflet/dist/leaflet.css';
 import 'react-leaflet-cluster/dist/assets/MarkerCluster.css';
 import './globals.css';
 import { AuthProvider } from '@/lib/auth';
 
-const notoThai = Noto_Sans_Thai({
+const plex = IBM_Plex_Sans_Thai({
   subsets: ['thai', 'latin'],
   weight: ['400', '500', '600', '700'],
-  variable: '--font-thai',
+  variable: '--font-plex',
+  display: 'swap',
+});
+
+const plexLooped = IBM_Plex_Sans_Thai_Looped({
+  subsets: ['thai', 'latin'],
+  weight: ['400', '500'],
+  variable: '--font-plex-looped',
   display: 'swap',
 });
 
@@ -25,7 +32,7 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="th" className={notoThai.variable}>
+    <html lang="th" className={`${plex.variable} ${plexLooped.variable}`}>
       <body className="min-h-dvh antialiased">
         <AuthProvider>{children}</AuthProvider>
       </body>

@@ -5,72 +5,17 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import L from 'leaflet';
 import { MapContainer, Marker, TileLayer, Tooltip, ZoomControl, useMap, useMapEvents } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
-import { House, LifeBuoy, LocateFixed, LoaderCircle, MapPin, Package, Siren } from 'lucide-react';
 import { HATYAI_CENTER } from '@/lib/format';
 import { AreaBubble, CasePin, MePin, PickPin, PlacePin, TeamPin } from '@/components/pk/pins';
 import { CircleNotchIcon, CrosshairIcon } from '@/components/pk/icons';
 
-const URGENCY_COLOR = {
-  critical: '#dc2626',
-  high: '#ea580c',
-  medium: '#ca8a04',
-  low: '#64748b',
-};
+// ภาพแผนที่พลาดติดกันหลายแผ่นโดยไม่มีแผ่นไหนโหลดได้ = เน็ตใช้ไม่ได้ (พลาดแผ่นเดียวถือว่าปกติ)
+const TILE_FAIL_LIMIT = 4;
 
-const TYPE_STYLE = {
-  shelter: { color: '#15803d', Icon: House },
-  distribution: { color: '#c2410c', Icon: Package },
-  rescuer: { color: '#0f172a', Icon: LifeBuoy },
-  pick: { color: '#dc2626', Icon: MapPin },
-};
-
+// cache divIcon ไว้ เพราะ marker ถูกสร้างใหม่ทุกครั้งที่ polling
 const iconCache = new Map();
 
-// สร้าง divIcon จากไอคอน lucide (cache ไว้ เพราะ marker ถูกสร้างใหม่ทุกครั้งที่ polling)
-function pinIcon(color, Icon, { size = 34, selected = false } = {}) {
-  const key = `${color}-${Icon.displayName || Icon.name}-${size}-${selected}`;
-  if (!iconCache.has(key)) {
-    const svg = renderToStaticMarkup(<Icon size={Math.round(size * 0.5)} strokeWidth={2.4} aria-hidden />);
-    iconCache.set(
-      key,
-      L.divIcon({
-        className: `map-pin${selected ? ' is-selected' : ''}`,
-        html: `<div style="width:${size}px;height:${size}px;background:${color}">${svg}</div>`,
-        iconSize: [size, size],
-        iconAnchor: [size / 2, size / 2],
-      })
-    );
-  }
-  return iconCache.get(key);
-}
-
-function requestIcon(r, selected) {
-  // เคสที่มีทีมรับแล้วเป็นสีน้ำเงิน, ที่รออยู่ใช้สีตามความเร่งด่วน
-  const color = r.status === 'pending' ? URGENCY_COLOR[r.urgency] || URGENCY_COLOR.medium : '#2563eb';
-  return pinIcon(color, Siren, { size: r.urgency === 'critical' ? 38 : 34, selected });
-}
-
-const meIcon = L.divIcon({ className: 'map-pin', html: '<div class="me-dot"></div>', iconSize: [18, 18] });
-
-function clusterIcon(cluster) {
-  return L.divIcon({
-    className: 'map-cluster',
-    html: `<div>${cluster.getChildCount()}</div>`,
-    iconSize: [44, 44],
-  });
-}
-
-const CLASSIC_PINS = {
-  request: requestIcon,
-  place: (kind, active, selected) =>
-    pinIcon(active ? TYPE_STYLE[kind].color : '#64748b', TYPE_STYLE[kind].Icon, { selected }),
-  rescuer: (selected) => pinIcon(TYPE_STYLE.rescuer.color, LifeBuoy, { size: 32, selected }),
-  me: () => meIcon,
-  pick: (picker) => pinIcon(picker.color || TYPE_STYLE.pick.color, picker.icon || MapPin, { size: 40 }),
-  cluster: clusterIcon,
-};
-
-// หมุดแบบหน้าคนทั่วไป: เรนเดอร์ชิ้นจาก components/pk/pins เป็น html ของ divIcon
+// เรนเดอร์ชิ้นจาก components/pk/pins เป็น html ของ divIcon
 function nodeIcon(key, node, size) {
   if (!iconCache.has(key)) {
     iconCache.set(
@@ -86,46 +31,84 @@ function nodeIcon(key, node, size) {
   return iconCache.get(key);
 }
 
-const PUBLIC_PINS = {
+const PINS = {
   request: (r, selected) =>
-    nodeIcon(`pk-q-${r.urgency}-${r.status}-${selected}`, <CasePin urgency={r.urgency} status={r.status} big={selected} />, selected ? 36 : 30),
+    nodeIcon(`q-${r.urgency}-${r.status}-${selected}`, <CasePin urgency={r.urgency} status={r.status} big={selected} />, selected ? 36 : 30),
   place: (kind, active, selected) =>
-    nodeIcon(`pk-${kind}-${active}-${selected}`, <PlacePin kind={kind} active={active} big={selected} />, selected ? 36 : 30),
-  rescuer: () => nodeIcon('pk-team', <TeamPin />, 30),
-  me: () => nodeIcon('pk-me', <MePin />, 18),
-  pick: () => nodeIcon('pk-pick', <PickPin />, 40),
+    nodeIcon(`${kind}-${active}-${selected}`, <PlacePin kind={kind} active={active} big={selected} />, selected ? 36 : 30),
+  rescuer: (selected) => nodeIcon(`team-${selected}`, <TeamPin big={selected} />, selected ? 40 : 30),
+  me: () => nodeIcon('me', <MePin />, 18),
+  // picker.kind: 'team' = กู้ภัยปักตำแหน่งตัวเอง | 'shelter' / 'distribution' = ปักสถานที่ | ไม่ส่ง = จุดขอความช่วยเหลือ
+  pick: (picker) => {
+    if (picker.kind === 'team') return nodeIcon('pick-team', <TeamPin big />, 40);
+    if (picker.kind) return nodeIcon(`pick-${picker.kind}`, <PlacePin kind={picker.kind} big />, 36);
+    return nodeIcon('pick', <PickPin />, 40);
+  },
   cluster: (cluster) => {
     const count = cluster.getChildCount();
     const urgent = cluster.getAllChildMarkers().some((m) => m.options.urgent);
-    return nodeIcon(`pk-c-${count}-${urgent}`, <AreaBubble count={count} urgent={urgent} />, 36);
+    return nodeIcon(`c-${count}-${urgent}`, <AreaBubble count={count} urgent={urgent} />, 36);
   },
 };
 
 // focus.coverBottom / coverTop (ไม่บังคับ) = ฟังก์ชันคืนความสูง px ที่ถูกบังด้านล่าง (เช่น bottom sheet) / ด้านบน
-// (เช่น แถบข่าว + แถวชิป) → วางจุดไว้กลางพื้นที่ที่ยังมองเห็น แทนกลางแผนที่ทั้งแผ่น
+// coverElements คืน element ที่ต้องวัดใหม่หลังขนาดเปลี่ยน เช่น แผ่นข้อมูลที่กำลังขยาย
+// วางจุดไว้กลางพื้นที่ที่ยังมองเห็น แทนกลางแผนที่ทั้งแผ่น
 const FOCUS_TOP = 48; // ไม่ส่ง coverTop มา → เว้นแถบชิปด้านบนแถวเดียว
-const FOCUS_MIN_VISIBLE = 80;
+const FOCUS_SETTLE_MS = 200;
 
 function FlyTo({ focus }) {
   const map = useMap();
+  const focusRef = useRef(focus);
   const lat = focus?.lat;
   const lng = focus?.lng;
   const zoom = focus?.zoom;
-  const coverBottom = focus?.coverBottom;
-  const coverTop = focus?.coverTop;
+
+  useEffect(() => {
+    focusRef.current = focus;
+  });
+
   useEffect(() => {
     if (lat == null || lng == null) return;
     const z = zoom || Math.max(map.getZoom(), 15);
-    let target = L.latLng(lat, lng);
-    if (coverBottom || coverTop) {
-      const h = map.getSize().y;
-      const top = coverTop ? coverTop() : FOCUS_TOP;
-      const bottom = Math.min(coverBottom ? coverBottom() : 0, h - top - FOCUS_MIN_VISIBLE);
-      const shift = (bottom - top) / 2;
+    let lastGeometry = null;
+    let timer = null;
+
+    const align = () => {
+      const { x: width, y: height } = map.getSize();
+      if (!width || !height) return;
+      const { coverBottom, coverTop } = focusRef.current || {};
+      const covered = Boolean(coverBottom || coverTop);
+      const top = covered ? Math.max(0, Number(coverTop ? coverTop() : FOCUS_TOP) || 0) : 0;
+      const bottom = Math.max(0, Number(coverBottom?.()) || 0);
+      const geometry = [width, height, top, bottom].join(':');
+      if (geometry === lastGeometry) return;
+      lastGeometry = geometry;
+
+      let target = L.latLng(lat, lng);
+      // ใช้พื้นที่บังจริง; ถ้าจอเตี้ยจนไม่มีช่องเหลือ ให้เลือกตำแหน่งที่ใกล้ช่องนั้นที่สุดในแผนที่
+      const visibleMiddle = Math.max(0, Math.min(height, (height + top - bottom) / 2));
+      const shift = height / 2 - visibleMiddle;
       if (shift !== 0) target = map.unproject(map.project(target, z).add([0, shift]), z);
-    }
-    map.flyTo(target, z, { duration: 0.6 });
-  }, [lat, lng, zoom, coverBottom, coverTop, map]);
+      map.flyTo(target, z, { duration: 0.6 });
+    };
+
+    const schedule = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(align, FOCUS_SETTLE_MS);
+    };
+
+    align();
+    const observer = new ResizeObserver(schedule);
+    const elements = [map.getContainer(), ...(focusRef.current?.coverElements?.() || [])];
+    for (const element of new Set(elements.filter(Boolean))) observer.observe(element);
+    map.on('resize', schedule);
+    return () => {
+      window.clearTimeout(timer);
+      observer.disconnect();
+      map.off('resize', schedule);
+    };
+  }, [lat, lng, zoom, map]);
   return null;
 }
 
@@ -166,7 +149,7 @@ function ClickPicker({ onPick }) {
   return null;
 }
 
-function LocateControl({ onLocate, className, publicStyle = false }) {
+function LocateControl({ onLocate, className }) {
   const map = useMap();
   const ref = useRef(null);
   const [busy, setBusy] = useState(false);
@@ -208,33 +191,18 @@ function LocateControl({ onLocate, className, publicStyle = false }) {
           {error}
         </p>
       )}
-      {publicStyle ? (
-        <button
-          type="button"
-          onClick={locate}
-          aria-label="ไปยังตำแหน่งของฉัน"
-          className="grid size-11 place-items-center rounded-full bg-white text-ink shadow-float focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acc"
-        >
-          {busy ? (
-            <CircleNotchIcon size={22} className="animate-spin" aria-hidden />
-          ) : (
-            <CrosshairIcon size={22} aria-hidden />
-          )}
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={locate}
-          aria-label="ไปยังตำแหน่งของฉัน"
-          className="grid size-12 cursor-pointer place-items-center rounded-full bg-surface text-ink shadow-[var(--shadow-float)] hover:bg-slate-50"
-        >
-          {busy ? (
-            <LoaderCircle className="size-5 animate-spin" aria-hidden />
-          ) : (
-            <LocateFixed className="size-5" aria-hidden />
-          )}
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={locate}
+        aria-label="ไปยังตำแหน่งของฉัน"
+        className="grid size-11 place-items-center rounded-full bg-white text-ink shadow-float focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acc"
+      >
+        {busy ? (
+          <CircleNotchIcon size={22} className="animate-spin" aria-hidden />
+        ) : (
+          <CrosshairIcon size={22} aria-hidden />
+        )}
+      </button>
     </div>
   );
 }
@@ -259,9 +227,8 @@ export default function MapViewInner({
   center = HATYAI_CENTER,
   zoom = 14,
   className = 'h-full w-full',
-  pinStyle = 'classic', // 'public' = หมุดแบบหน้าคนทั่วไป (components/pk/pins)
 }) {
-  const pins = pinStyle === 'public' ? PUBLIC_PINS : CLASSIC_PINS;
+  const [tileFails, setTileFails] = useState(0);
   const visible = { requests: true, shelters: true, distributions: true, rescuers: true, ...show };
   const isSel = (type, id) => selected?.type === type && selected?.id === id;
   const select = (type, item) => ({ click: () => onSelect?.(type, item) });
@@ -272,7 +239,19 @@ export default function MapViewInner({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         maxZoom={19}
+        eventHandlers={{
+          tileerror: () => setTileFails((n) => n + 1),
+          tileload: () => setTileFails(0),
+        }}
       />
+      {tileFails >= TILE_FAIL_LIMIT && (
+        <p
+          role="status"
+          className="pointer-events-none absolute inset-x-3 top-1/3 z-[450] mx-auto max-w-xs rounded-lg bg-ink/90 px-3.5 py-2.5 text-center text-base text-white"
+        >
+          ภาพแผนที่โหลดไม่ขึ้น อาจเพราะสัญญาณอ่อน หมุดและรายการยังใช้งานได้
+        </p>
+      )}
       {zoomControl && <ZoomControl position="topright" />}
       <AutoResize />
       <FlyTo focus={focus} />
@@ -283,7 +262,7 @@ export default function MapViewInner({
           <Marker
             key={`s-${s.id}`}
             position={[s.lat, s.lng]}
-            icon={pins.place('shelter', s.status === 'open', isSel('shelter', s.id))}
+            icon={PINS.place('shelter', s.status === 'open', isSel('shelter', s.id))}
             eventHandlers={select('shelter', s)}
             title={`ที่พักพิง: ${s.name}`}
           >
@@ -296,7 +275,7 @@ export default function MapViewInner({
           <Marker
             key={`d-${d.id}`}
             position={[d.lat, d.lng]}
-            icon={pins.place('distribution', d.status === 'active', isSel('distribution', d.id))}
+            icon={PINS.place('distribution', d.status === 'active', isSel('distribution', d.id))}
             eventHandlers={select('distribution', d)}
             title={`จุดแจกจ่าย: ${d.name}`}
           >
@@ -311,7 +290,7 @@ export default function MapViewInner({
             <Marker
               key={`r-${r.id}`}
               position={[r.current_lat, r.current_lng]}
-              icon={pins.rescuer(isSel('rescuer', r.id))}
+              icon={PINS.rescuer(isSel('rescuer', r.id))}
               eventHandlers={select('rescuer', r)}
               title={`หน่วยกู้ภัย: ${r.team_name || r.full_name || ''}`}
             >
@@ -324,13 +303,13 @@ export default function MapViewInner({
           chunkedLoading
           maxClusterRadius={50}
           showCoverageOnHover={false}
-          iconCreateFunction={pins.cluster}
+          iconCreateFunction={PINS.cluster}
         >
           {requests.filter((r) => !mine.includes(r.id)).map((r) => (
             <Marker
               key={`q-${r.id}`}
               position={[r.lat, r.lng]}
-              icon={pins.request(r, isSel('request', r.id))}
+              icon={PINS.request(r, isSel('request', r.id))}
               urgent={r.urgency === 'critical' && r.status === 'pending'}
               eventHandlers={select('request', r)}
               title={`เคส ${r.case_no}`}
@@ -344,7 +323,7 @@ export default function MapViewInner({
         <Marker
           key={`mine-${r.id}`}
           position={[r.lat, r.lng]}
-          icon={pins.request(r, true)}
+          icon={PINS.request(r, true)}
           eventHandlers={select('request', r)}
           zIndexOffset={900}
           title={`เคสของฉัน ${r.case_no}`}
@@ -358,7 +337,7 @@ export default function MapViewInner({
       {me?.lat != null && (
         <Marker
           position={[me.lat, me.lng]}
-          icon={me.draggable ? pinIcon(TYPE_STYLE.rescuer.color, LifeBuoy, { size: 40, selected: true }) : pins.me()}
+          icon={me.draggable ? PINS.pick({ kind: 'team' }) : PINS.me()}
           draggable={Boolean(me.draggable)}
           eventHandlers={me.draggable ? { dragend: (e) => me.onDrag?.(e.target.getLatLng()) } : undefined}
           zIndexOffset={1000}
@@ -378,7 +357,7 @@ export default function MapViewInner({
           {picker.value && (
             <Marker
               position={[picker.value.lat, picker.value.lng]}
-              icon={pins.pick(picker)}
+              icon={PINS.pick(picker)}
               draggable
               eventHandlers={{ dragend: (e) => picker.onChange(e.target.getLatLng()) }}
               zIndexOffset={1000}
@@ -388,7 +367,7 @@ export default function MapViewInner({
         </>
       )}
 
-      {locate && <LocateControl onLocate={onLocate} className={locateClassName} publicStyle={pinStyle === 'public'} />}
+      {locate && <LocateControl onLocate={onLocate} className={locateClassName} />}
     </MapContainer>
   );
 }

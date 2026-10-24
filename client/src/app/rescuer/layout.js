@@ -2,16 +2,19 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { ClipboardList, LogOut, Map } from 'lucide-react';
-import { Spinner, cx } from '@/components/ui';
+import { ClipboardTextIcon, MapTrifoldIcon, SignOutIcon } from '@/components/pk/icons';
+import { Spinner } from '@/components/pk/Spinner';
+import { cn } from '@/components/pk/cn';
 import { useAuth, useRequireRole } from '@/lib/auth';
 
 const ROLES = ['rescuer'];
 
 const ITEMS = [
-  { href: '/rescuer', label: 'แผนที่เคส', icon: Map },
-  { href: '/rescuer/missions', label: 'ภารกิจของฉัน', icon: ClipboardList },
+  { href: '/rescuer', label: 'แผนที่เคส', icon: MapTrifoldIcon },
+  { href: '/rescuer/missions', label: 'ภารกิจของฉัน', icon: ClipboardTextIcon },
 ];
+
+const TAB = 'relative flex h-full w-full flex-col items-center justify-center gap-1 text-xs';
 
 export default function RescuerLayout({ children }) {
   const { allowed } = useRequireRole(ROLES);
@@ -24,7 +27,7 @@ export default function RescuerLayout({ children }) {
   return (
     <>
       <main className="min-h-dvh pb-[calc(4rem+env(safe-area-inset-bottom))]">{children}</main>
-      <nav aria-label="เมนูกู้ภัย" className="pb-safe fixed inset-x-0 bottom-0 z-[1000] border-t border-line bg-surface">
+      <nav aria-label="เมนูกู้ภัย" className="pb-safe fixed inset-x-0 bottom-0 z-[1000] border-t border-line bg-white">
         <ul className="mx-auto grid h-16 max-w-xl grid-cols-3">
           {ITEMS.map(({ href, label, icon: Icon }) => {
             const active = pathname === href;
@@ -33,12 +36,10 @@ export default function RescuerLayout({ children }) {
                 <Link
                   href={href}
                   aria-current={active ? 'page' : undefined}
-                  className={cx(
-                    'flex h-full flex-col items-center justify-center gap-0.5 text-xs font-medium',
-                    active ? 'text-safety-dark' : 'text-muted hover:text-ink'
-                  )}
+                  className={cn(TAB, active ? 'font-semibold text-acc' : 'font-medium text-t3 hover:text-ink')}
                 >
-                  <Icon className="size-6" aria-hidden />
+                  {active && <span aria-hidden className="absolute top-0 h-0.75 w-7 rounded-full bg-acc" />}
+                  <Icon size={24} weight={active ? 'fill' : 'regular'} aria-hidden />
                   {label}
                 </Link>
               </li>
@@ -51,9 +52,9 @@ export default function RescuerLayout({ children }) {
                 logout();
                 router.replace('/login');
               }}
-              className="flex h-full w-full cursor-pointer flex-col items-center justify-center gap-0.5 text-xs font-medium text-muted hover:text-ink"
+              className={cn(TAB, 'cursor-pointer font-medium text-t3 hover:text-ink')}
             >
-              <LogOut className="size-6" aria-hidden />
+              <SignOutIcon size={24} aria-hidden />
               ออกจากระบบ
             </button>
           </li>

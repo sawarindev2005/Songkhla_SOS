@@ -31,7 +31,7 @@ export function RadioCards({ label, options, value, onChange }) {
               on ? 'border-acc bg-acc-bg ring-1 ring-acc ring-inset' : 'border-line bg-white',
             )}
           >
-            <span aria-hidden className={cn('grid size-5.5 shrink-0 place-items-center rounded-full border-2', on ? 'border-acc bg-acc' : 'border-line2 bg-white')}>
+            <span aria-hidden className={cn('grid size-5.5 shrink-0 place-items-center rounded-full border-2', on ? 'border-acc bg-acc' : 'border-t3 bg-white')}>
               {on && <span className="size-2 rounded-full bg-white" />}
             </span>
             {o.icon}

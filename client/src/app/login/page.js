@@ -3,8 +3,10 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Eye, EyeOff, LifeBuoy, LogIn } from 'lucide-react';
-import { Button, ErrorBanner, Field, inputClass } from '@/components/ui';
+import { Button } from '@/components/pk/Button';
+import { ErrorBanner } from '@/components/pk/ErrorBanner';
+import { Field, inputClass } from '@/components/pk/Field';
+import { ArrowLeftIcon, EyeIcon, EyeSlashIcon, LifebuoyIcon, SignInIcon } from '@/components/pk/icons';
 import { ROLE_HOME, useAuth } from '@/lib/auth';
 
 export default function LoginPage() {
@@ -44,29 +46,29 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-dvh flex-col bg-ink px-4 py-6">
+    <main className="flex min-h-dvh flex-col bg-s1 px-4 py-6">
       <Link
         href="/"
-        className="flex min-h-11 w-fit items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-slate-300 hover:text-white"
+        className="flex min-h-11 w-fit items-center gap-1.5 rounded-lg px-2 text-base font-semibold text-t2 hover:bg-s2 hover:text-ink"
       >
-        <ArrowLeft className="size-4" aria-hidden />
+        <ArrowLeftIcon size={18} aria-hidden />
         กลับหน้าแผนที่
       </Link>
 
       <div className="m-auto w-full max-w-sm">
-        <div className="mb-6 flex flex-col items-center gap-3 text-center text-white">
-          <span className="grid size-14 place-items-center rounded-2xl bg-brand">
-            <LifeBuoy className="size-7" aria-hidden />
-          </span>
+        <div className="mb-6 flex flex-col items-center gap-3 text-center">
+          <LifebuoyIcon size={48} weight="fill" className="text-red" aria-hidden />
           <div>
-            <h1 className="text-2xl font-bold">เข้าสู่ระบบเจ้าหน้าที่</h1>
-            <p className="text-sm text-slate-300">อาสากู้ภัย · ศูนย์บัญชาการ · ผู้ดูแลระบบ</p>
+            <h1 className="text-6xl font-bold">เข้าสู่ระบบเจ้าหน้าที่</h1>
+            <p className="text-base text-t2">อาสากู้ภัย · ศูนย์บัญชาการ · ผู้ดูแลระบบ</p>
           </div>
         </div>
 
-        <form onSubmit={submit} noValidate className="flex flex-col gap-4 rounded-2xl bg-surface p-5 shadow-xl">
+        <form onSubmit={submit} noValidate className="flex flex-col gap-4 rounded-xl border border-line bg-white p-5">
           {expired && !error && (
-            <p className="rounded-xl bg-warn-soft p-3 text-sm text-ink">เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง</p>
+            <p className="rounded-lg border border-amb-line bg-amb-bg p-3 text-base text-amb-tx">
+              เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง
+            </p>
           )}
           <Field label="ชื่อผู้ใช้">
             {(p) => (
@@ -96,19 +98,18 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
-                  className="absolute right-1 top-1/2 grid size-10 -translate-y-1/2 cursor-pointer place-items-center rounded-lg text-muted hover:text-ink"
+                  className="absolute right-1 top-1/2 grid size-10 -translate-y-1/2 cursor-pointer place-items-center rounded-lg text-t2 hover:text-ink"
                 >
-                  {showPassword ? <EyeOff className="size-5" aria-hidden /> : <Eye className="size-5" aria-hidden />}
+                  {showPassword ? <EyeSlashIcon size={20} aria-hidden /> : <EyeIcon size={20} aria-hidden />}
                 </button>
               </div>
             )}
           </Field>
           <ErrorBanner error={error} />
-          <Button type="submit" variant="dark" size="lg" loading={loading}>
-            {!loading && <LogIn className="size-5" aria-hidden />}
+          <Button type="submit" loading={loading} icon={<SignInIcon size={20} weight="bold" aria-hidden />}>
             เข้าสู่ระบบ
           </Button>
-          <p className="text-center text-sm text-muted">ยังไม่มีบัญชี? ติดต่อผู้ดูแลระบบเพื่อขอสร้างบัญชี</p>
+          <p className="text-center text-base text-t2">ยังไม่มีบัญชี? ติดต่อผู้ดูแลระบบเพื่อขอสร้างบัญชี</p>
         </form>
       </div>
     </main>

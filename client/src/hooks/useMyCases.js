@@ -5,7 +5,9 @@ import { api } from '@/lib/api';
 import { POLL_MS } from './usePolling';
 
 // ดึงสถานะล่าสุดของเคสที่เครื่องนี้แจ้งไว้ทุกเคสพร้อมกัน ทุก 15 วินาที (หยุดเมื่อแท็บถูกซ่อน)
-// คืน { cases: ข้อมูลจาก /requests/track/:caseNo ตามลำดับเลขเคส (เคสที่ดึงไม่ได้ข้ามไป), loading }
+// คืน { cases: ข้อมูลจาก /requests/track/:caseNo ตามลำดับเลขเคส, loading }
+// เคสที่รอบนี้ดึงไม่ได้ (เน็ตหลุด) ใช้ข้อมูลรอบก่อนแทน การ์ด "เคสที่ฉันแจ้ง" จึงไม่หายตอนเน็ตไม่ดี
+// เคสที่ยังไม่เคยดึงได้เลยจะยังไม่แสดง
 export function useMyCases(caseNos) {
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(caseNos.length > 0);
@@ -18,7 +20,12 @@ export function useMyCases(caseNos) {
     const load = async () => {
       const results = await Promise.allSettled(list.map((no) => api(`/requests/track/${no}`)));
       if (!alive) return;
-      setCases(results.filter((r) => r.status === 'fulfilled').map((r) => r.value));
+      setCases((prev) => {
+        const last = new Map(prev.map((c) => [c.case_no, c]));
+        return results
+          .map((r, i) => (r.status === 'fulfilled' ? r.value : last.get(list[i])))
+          .filter(Boolean);
+      });
       setLoading(false);
     };
     load();

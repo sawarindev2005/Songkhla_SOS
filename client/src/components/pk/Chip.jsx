@@ -13,7 +13,7 @@ export function Chip({ selected = false, muted = false, layer = false, count, ic
       className={cn(
         'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.75 text-sm font-medium whitespace-nowrap',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acc',
-        map && 'shadow-chip',
+        map && 'md:min-h-11 shadow-chip',
         selected ? 'bg-ink text-white [&_svg]:text-white'
           : muted ? 'bg-white/85 text-t4 [&_svg]:text-t4'
             : map ? 'bg-white text-chip-tx' : 'bg-s2 text-chip-tx',

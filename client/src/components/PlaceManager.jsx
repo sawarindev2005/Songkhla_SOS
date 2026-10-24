@@ -1,10 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { House, Package, Pencil, Plus, Trash2 } from 'lucide-react';
 import { PageHeader } from './StaffShell';
 import { MapView } from './map';
-import { Button, EmptyState, ErrorBanner, Field, Modal, Spinner, StatusBadge, cx, inputClass } from './ui';
+import { Button } from './pk/Button';
+import { ConfirmDialog } from './pk/ConfirmDialog';
+import { EmptyState } from './pk/EmptyState';
+import { ErrorBanner } from './pk/ErrorBanner';
+import { Field, inputClass } from './pk/Field';
+import { Modal } from './pk/Modal';
+import { Spinner } from './pk/Spinner';
+import { PlaceStatusBadge } from './pk/domain';
+import { HouseLineIcon, PackageIcon, PencilSimpleIcon, PlusIcon, TrashIcon } from './pk/icons';
+import { cn } from './pk/cn';
 import { usePolling } from '@/hooks/usePolling';
 import { api } from '@/lib/api';
 import { DIST_STATUS, SHELTER_STATUS, formatNumber } from '@/lib/format';
@@ -14,8 +22,7 @@ const CONFIG = {
     path: '/shelters',
     title: 'จัดการที่พักพิง',
     noun: 'ที่พักพิง',
-    icon: House,
-    color: '#15803d',
+    icon: HouseLineIcon,
     statusMap: SHELTER_STATUS,
     mapProp: 'shelters',
     empty: { name: '', address: '', capacity: 100, current_occupancy: 0, contact_phone: '', facilities: '', status: 'open' },
@@ -24,8 +31,7 @@ const CONFIG = {
     path: '/distributions',
     title: 'จัดการจุดแจกจ่าย',
     noun: 'จุดแจกจ่าย',
-    icon: Package,
-    color: '#c2410c',
+    icon: PackageIcon,
     statusMap: DIST_STATUS,
     mapProp: 'distributions',
     empty: { name: '', address: '', supply_types: 'อาหาร, น้ำดื่ม', open_time: '08:00', close_time: '18:00', contact_phone: '', status: 'active' },
@@ -90,6 +96,7 @@ export default function PlaceManager({ type }) {
 
   async function remove() {
     setSaving(true);
+    setFormError(null);
     try {
       await api(`${cfg.path}/${deleting.id}`, { method: 'DELETE' });
       setDeleting(null);
@@ -110,8 +117,7 @@ export default function PlaceManager({ type }) {
         title={cfg.title}
         desc={`${places.length} แห่ง · ข้อมูลแสดงบนแผนที่ประชาชนทันที`}
         actions={
-          <Button onClick={openNew} variant="dark">
-            <Plus className="size-4" aria-hidden />
+          <Button onClick={openNew} size="sm" block={false} icon={<PlusIcon size={18} weight="bold" aria-hidden />}>
             เพิ่ม{cfg.noun}
           </Button>
         }
@@ -119,7 +125,7 @@ export default function PlaceManager({ type }) {
       <ErrorBanner error={error} onRetry={refresh} />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_26rem]">
-        <div className="h-[40dvh] overflow-hidden rounded-2xl border border-line lg:sticky lg:top-6 lg:h-[calc(100dvh-9rem)]">
+        <div className="h-[40dvh] overflow-hidden rounded-xl border border-line lg:sticky lg:top-6 lg:h-[calc(100dvh-9rem)]">
           <MapView
             {...{ [cfg.mapProp]: places }}
             selected={selectedId ? { type, id: selectedId } : null}
@@ -140,9 +146,9 @@ export default function PlaceManager({ type }) {
           {places.map((p) => (
             <article
               key={p.id}
-              className={cx(
-                'rounded-2xl border bg-surface p-4',
-                selectedId === p.id ? 'border-safety ring-2 ring-safety/20' : 'border-line'
+              className={cn(
+                'rounded-xl border bg-white p-4',
+                selectedId === p.id ? 'border-acc outline-2 outline-acc-line' : 'border-line'
               )}
             >
               <button
@@ -154,23 +160,36 @@ export default function PlaceManager({ type }) {
                 className="w-full cursor-pointer text-left"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <h2 className="font-bold leading-snug">{p.name}</h2>
-                  <StatusBadge status={p.status} map={cfg.statusMap} />
+                  <h2 className="font-bold">{p.name}</h2>
+                  <PlaceStatusBadge kind={type} status={p.status} />
                 </div>
-                <p className="mt-1 text-sm text-muted">
+                <p className="mt-1 text-base text-t2">
                   {type === 'shelter'
                     ? `พัก ${formatNumber(p.current_occupancy)} / ${formatNumber(p.capacity)} คน`
                     : `${p.supply_types || '-'} · ${hhmm(p.open_time) || '?'}–${hhmm(p.close_time) || '?'} น.`}
                 </p>
-                {p.address && <p className="text-sm text-muted">{p.address}</p>}
+                {p.address && <p className="text-base text-t2">{p.address}</p>}
               </button>
               <div className="mt-3 flex gap-2">
-                <Button size="sm" variant="outline" onClick={() => openEdit(p)}>
-                  <Pencil className="size-4" aria-hidden />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  block={false}
+                  onClick={() => openEdit(p)}
+                  icon={<PencilSimpleIcon size={18} aria-hidden />}
+                >
                   แก้ไข
                 </Button>
-                <Button size="sm" variant="danger" onClick={() => setDeleting(p)}>
-                  <Trash2 className="size-4" aria-hidden />
+                <Button
+                  size="sm"
+                  variant="dangerOutline"
+                  block={false}
+                  onClick={() => {
+                    setFormError(null);
+                    setDeleting(p);
+                  }}
+                  icon={<TrashIcon size={18} aria-hidden />}
+                >
                   ลบ
                 </Button>
               </div>
@@ -186,10 +205,10 @@ export default function PlaceManager({ type }) {
         onClose={() => setEditing(null)}
         footer={
           <>
-            <Button variant="outline" onClick={() => setEditing(null)}>
+            <Button variant="outline" size="sm" block={false} onClick={() => setEditing(null)}>
               ยกเลิก
             </Button>
-            <Button type="submit" form="place-form" variant="dark" loading={saving}>
+            <Button type="submit" form="place-form" size="sm" block={false} loading={saving}>
               บันทึก
             </Button>
           </>
@@ -198,13 +217,13 @@ export default function PlaceManager({ type }) {
         {editing && (
           <form id="place-form" onSubmit={save} noValidate className="grid gap-4 md:grid-cols-2">
             <div className="flex flex-col gap-1.5 md:col-span-2">
-              <p className="text-sm font-semibold">
-                ตำแหน่งบนแผนที่ <span className="text-brand">*</span>
+              <p className="text-base font-medium">
+                ตำแหน่งบนแผนที่ <span className="text-red">*</span>
               </p>
               <div
-                className={cx(
-                  'h-64 overflow-hidden rounded-xl border-2',
-                  fieldErrors.position ? 'border-brand' : 'border-line'
+                className={cn(
+                  'h-64 overflow-hidden rounded-lg border',
+                  fieldErrors.position ? 'border-red' : 'border-line2'
                 )}
               >
                 <MapView
@@ -214,15 +233,14 @@ export default function PlaceManager({ type }) {
                       setEditing((ed) => ({ ...ed, position: { lat: p.lat, lng: p.lng } }));
                       setFieldErrors((er) => ({ ...er, position: undefined }));
                     },
-                    icon: cfg.icon,
-                    color: cfg.color,
+                    kind: type,
                   }}
                   center={editing.position ? [editing.position.lat, editing.position.lng] : undefined}
                   zoomControl
                   locate={false}
                 />
               </div>
-              <p className={cx('text-sm', fieldErrors.position ? 'text-brand-dark' : 'text-muted')}>
+              <p className={cn('font-body text-sm', fieldErrors.position ? 'text-red-tx' : 'text-t3')}>
                 {fieldErrors.position ||
                   (editing.position
                     ? `${editing.position.lat.toFixed(5)}, ${editing.position.lng.toFixed(5)} — ลากหมุดเพื่อปรับ`
@@ -286,25 +304,23 @@ export default function PlaceManager({ type }) {
         )}
       </Modal>
 
-      <Modal
+      <ConfirmDialog
         open={Boolean(deleting)}
         title={`ลบ${cfg.noun}`}
-        onClose={() => setDeleting(null)}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setDeleting(null)}>
-              ยกเลิก
-            </Button>
-            <Button variant="primary" loading={saving} onClick={remove}>
-              ลบ
-            </Button>
-          </>
-        }
+        confirmLabel="ลบ"
+        confirmVariant="danger"
+        confirmIcon={<TrashIcon size={20} aria-hidden />}
+        loading={saving}
+        onConfirm={remove}
+        onCancel={() => setDeleting(null)}
       >
         <p>
           ต้องการลบ “{deleting?.name}” ใช่หรือไม่? หากแค่ปิดชั่วคราว แนะนำให้แก้สถานะเป็น “ปิด” แทน
         </p>
-      </Modal>
+        <div className="mt-3">
+          <ErrorBanner error={formError} />
+        </div>
+      </ConfirmDialog>
     </>
   );
 }

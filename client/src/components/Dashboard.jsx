@@ -10,12 +10,38 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { CircleCheck, House, LifeBuoy, Siren, Timer, Users } from 'lucide-react';
 import { STATUS, URGENCY, formatMinutes, formatNumber, timeAgo } from '@/lib/format';
-import { StatCard, StatusBadge, UrgencyBadge } from './ui';
+import { CaseStatusBadge, URGENCY_BG, UrgencyBadge } from './pk/domain';
+import { CheckCircleIcon, HourglassMediumIcon, HouseLineIcon, NavigationArrowIcon, TimerIcon, UsersIcon } from './pk/icons';
+import { cn } from './pk/cn';
 
 // สีชุดข้อมูล (ผ่าน validate_palette.js: CVD ΔE 27.4)
-const SERIES = { created: '#2563eb', rescued: '#15803d' };
+const SERIES = { created: '#1d4ed8', rescued: '#15803d' };
+
+// สีตามความหมายเดียวกับป้ายสถานะ: รอ เหลืองอำพัน | ทีมกำลังไป น้ำเงิน | เสร็จ เขียว | สถานที่ น้ำเงิน
+const TONE = {
+  amber: 'bg-amb-bg text-amb-tx',
+  accent: 'bg-acc-bg text-acc',
+  ok: 'bg-ok-bg text-ok',
+  gray: 'bg-s2 text-t2',
+};
+
+function StatCard({ label, value, icon: Icon, tone = 'gray', sub }) {
+  return (
+    <div className="rounded-xl border border-line bg-white p-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-base font-medium text-t2">{label}</p>
+        {Icon && (
+          <span className={cn('grid size-9 place-items-center rounded-lg', TONE[tone])}>
+            <Icon size={20} weight="bold" aria-hidden />
+          </span>
+        )}
+      </div>
+      <p className="mt-2 text-7xl font-bold tabular-nums">{value}</p>
+      {sub && <p className="mt-1 text-base text-t2">{sub}</p>}
+    </div>
+  );
+}
 
 export function KpiGrid({ s }) {
   return (
@@ -23,29 +49,29 @@ export function KpiGrid({ s }) {
       <StatCard
         label="รอความช่วยเหลือ"
         value={formatNumber(s.pending)}
-        icon={Siren}
-        tone="brand"
+        icon={HourglassMediumIcon}
+        tone="amber"
         sub={`${formatNumber(s.people_waiting)} คน · กลุ่มเปราะบาง ${formatNumber(s.vulnerable_waiting)} เคส`}
       />
       <StatCard
         label="กำลังช่วยเหลือ"
         value={formatNumber(s.in_progress)}
-        icon={LifeBuoy}
-        tone="safety"
+        icon={NavigationArrowIcon}
+        tone="accent"
         sub={`${formatNumber(s.active_teams)} ทีมออกปฏิบัติงาน`}
       />
       <StatCard
         label="ช่วยเหลือแล้ว"
         value={formatNumber(s.rescued)}
-        icon={CircleCheck}
-        tone="shelter"
+        icon={CheckCircleIcon}
+        tone="ok"
         sub={`รวม ${formatNumber(s.people_rescued)} คน`}
       />
       <StatCard
         label="ที่พักพิงว่าง"
         value={formatNumber(s.available_beds)}
-        icon={House}
-        tone="supply"
+        icon={HouseLineIcon}
+        tone="accent"
         sub={`เปิด ${s.open_shelters} แห่ง · จุดแจก ${s.active_distributions} จุด`}
       />
     </div>
@@ -54,18 +80,18 @@ export function KpiGrid({ s }) {
 
 export function ResponseTimes({ s }) {
   return (
-    <div className="grid grid-cols-2 gap-3">
-      <StatCard label="เวลาเฉลี่ยจนมีทีมรับเคส" value={formatMinutes(s.avg_assign_minutes)} icon={Timer} />
-      <StatCard label="เวลาเฉลี่ยจนช่วยเหลือสำเร็จ" value={formatMinutes(s.avg_resolve_minutes)} icon={Timer} />
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <StatCard label="เวลาเฉลี่ยจนมีทีมรับเคส" value={formatMinutes(s.avg_assign_minutes)} icon={TimerIcon} />
+      <StatCard label="เวลาเฉลี่ยจนช่วยเหลือสำเร็จ" value={formatMinutes(s.avg_resolve_minutes)} icon={TimerIcon} />
     </div>
   );
 }
 
 export function Panel({ title, desc, children, className = '' }) {
   return (
-    <section className={`rounded-2xl border border-line bg-surface p-4 sm:p-5 ${className}`}>
+    <section className={cn('rounded-xl border border-line bg-white p-4 sm:p-5', className)}>
       <h2 className="font-bold">{title}</h2>
-      {desc && <p className="text-sm text-muted">{desc}</p>}
+      {desc && <p className="text-base text-t2">{desc}</p>}
       <div className="mt-4">{children}</div>
     </section>
   );
@@ -77,12 +103,12 @@ const dayLabel = (d) =>
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-xl border border-line bg-surface px-3 py-2 text-sm shadow-lg">
+    <div className="rounded-lg border border-line bg-white px-3 py-2 text-base shadow-float">
       <p className="mb-1 font-semibold">{dayLabel(label)}</p>
       {payload.map((p) => (
         <p key={p.dataKey} className="flex items-center gap-2 text-ink">
           <span className="size-2.5 rounded-full" style={{ background: p.color }} aria-hidden />
-          {p.name}: <b className="tabular">{p.value}</b>
+          {p.name}: <b className="tabular-nums">{p.value}</b>
         </p>
       ))}
     </div>
@@ -123,10 +149,10 @@ export function DailyChart({ daily }) {
           </LineChart>
         </ResponsiveContainer>
       </div>
-      <details className="mt-2 text-sm">
-        <summary className="cursor-pointer text-muted hover:text-ink">ดูข้อมูลเป็นตาราง</summary>
-        <table className="tabular mt-2 w-full text-left">
-          <thead className="text-muted">
+      <details className="mt-2 text-base">
+        <summary className="cursor-pointer text-t2 hover:text-ink">ดูข้อมูลเป็นตาราง</summary>
+        <table className="tabular-nums mt-2 w-full text-left">
+          <thead className="text-t2">
             <tr>
               <th className="py-1 font-medium">วันที่</th>
               <th className="py-1 text-right font-medium">แจ้งเข้า</th>
@@ -148,20 +174,20 @@ export function DailyChart({ daily }) {
   );
 }
 
-// แท่งแนวนอนแบบ HTML: ชุดข้อมูลเดียว สีเดียว ป้ายชื่อ+ค่าเป็นข้อความ
+// แท่งแนวนอนแบบ HTML: สีแท่งตามความหมายของแถว (r.bar) ป้ายชื่อ+ค่าเป็นข้อความ
 export function BarList({ rows }) {
   const max = Math.max(1, ...rows.map((r) => r.value));
   return (
     <ul className="flex flex-col gap-3">
       {rows.map((r) => (
         <li key={r.key} title={`${r.label}: ${r.value}`}>
-          <div className="mb-1 flex items-center justify-between gap-2 text-sm">
+          <div className="mb-1 flex items-center justify-between gap-2 text-base">
             <span>{r.badge || r.label}</span>
-            <span className="tabular font-semibold">{formatNumber(r.value)}</span>
+            <span className="font-semibold tabular-nums">{formatNumber(r.value)}</span>
           </div>
-          <div className="h-2.5 rounded-full bg-slate-100">
+          <div className="h-2.5 rounded-full bg-s2">
             <div
-              className="h-full rounded-full bg-safety transition-[width] duration-300"
+              className={cn('h-full rounded-full transition-[width] duration-300', r.bar || 'bg-acc')}
               style={{ width: `${(r.value / max) * 100}%` }}
             />
           </div>
@@ -171,12 +197,15 @@ export function BarList({ rows }) {
   );
 }
 
+const STATUS_BAR = { pending: 'bg-amb', assigned: 'bg-acc', in_progress: 'bg-acc', rescued: 'bg-ok', cancelled: 'bg-t4' };
+
 export function statusRows(byStatus) {
   return Object.keys(STATUS).map((key) => ({
     key,
     label: STATUS[key].label,
     value: byStatus[key] || 0,
-    badge: <StatusBadge status={key} />,
+    bar: STATUS_BAR[key],
+    badge: <CaseStatusBadge status={key} />,
   }));
 }
 
@@ -185,72 +214,114 @@ export function urgencyRows(byUrgency) {
     key,
     label: URGENCY[key].label,
     value: byUrgency[key] || 0,
+    bar: URGENCY_BG[key],
     badge: <UrgencyBadge urgency={key} />,
   }));
 }
 
 export function TeamsTable({ teams }) {
-  if (!teams.length) return <p className="py-4 text-center text-sm text-muted">ยังไม่มีหน่วยกู้ภัย</p>;
+  if (!teams.length) return <p className="py-4 text-center text-base text-t2">ยังไม่มีหน่วยกู้ภัย</p>;
   return (
-    <div className="-mx-4 overflow-x-auto sm:mx-0">
-      <table className="w-full min-w-[420px] text-left text-sm">
-        <thead className="text-muted">
-          <tr>
-            <th className="px-4 py-2 font-medium sm:px-0">ทีม</th>
-            <th className="px-2 py-2 text-right font-medium">กำลังทำ</th>
-            <th className="px-4 py-2 text-right font-medium sm:px-0">ช่วยสำเร็จ</th>
-          </tr>
-        </thead>
-        <tbody>
-          {teams.map((t) => (
-            <tr key={t.id} className="border-t border-line">
-              <td className="px-4 py-2.5 sm:px-0">
-                <p className="font-semibold">{t.team_name || '-'}</p>
-                <p className="text-xs text-muted">{t.full_name}</p>
-              </td>
-              <td className="tabular px-2 py-2.5 text-right">{t.active}</td>
-              <td className="tabular px-4 py-2.5 text-right font-semibold sm:px-0">{t.rescued}</td>
+    <>
+      <ul className="flex flex-col gap-3 md:hidden">
+        {teams.map((t) => (
+          <li key={t.id} className="min-w-0 rounded-lg border border-line p-3 text-base break-words">
+            <p className="font-semibold">{t.team_name || '-'}</p>
+            <p className="text-xs text-t2">{t.full_name}</p>
+            <dl className="mt-3 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 tabular-nums">
+              <dt className="text-t2">กำลังทำ</dt>
+              <dd>{t.active}</dd>
+              <dt className="text-t2">ช่วยสำเร็จ</dt>
+              <dd className="font-semibold">{t.rescued}</dd>
+            </dl>
+          </li>
+        ))}
+      </ul>
+      <div className="-mx-4 hidden overflow-x-auto sm:mx-0 md:block">
+        <table className="w-full min-w-[420px] text-left text-base">
+          <thead className="text-t2">
+            <tr>
+              <th className="px-4 py-2 font-medium sm:px-0">ทีม</th>
+              <th className="px-2 py-2 text-right font-medium">กำลังทำ</th>
+              <th className="px-4 py-2 text-right font-medium sm:px-0">ช่วยสำเร็จ</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {teams.map((t) => (
+              <tr key={t.id} className="border-t border-line">
+                <td className="px-4 py-2.5 sm:px-0">
+                  <p className="font-semibold">{t.team_name || '-'}</p>
+                  <p className="text-xs text-t2">{t.full_name}</p>
+                </td>
+                <td className="tabular-nums px-2 py-2.5 text-right">{t.active}</td>
+                <td className="tabular-nums px-4 py-2.5 text-right font-semibold sm:px-0">{t.rescued}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
 export function RecentTable({ recent }) {
   return (
-    <div className="-mx-4 overflow-x-auto sm:mx-0">
-      <table className="w-full min-w-[640px] text-left text-sm">
-        <thead className="text-muted">
-          <tr>
-            <th className="px-4 py-2 font-medium sm:px-0">เคส</th>
-            <th className="px-2 py-2 font-medium">ผู้แจ้ง</th>
-            <th className="px-2 py-2 font-medium">ความเร่งด่วน</th>
-            <th className="px-2 py-2 font-medium">สถานะ</th>
-            <th className="px-2 py-2 font-medium">ทีม</th>
-            <th className="px-4 py-2 text-right font-medium sm:px-0">แจ้งเมื่อ</th>
-          </tr>
-        </thead>
-        <tbody>
-          {recent.map((r) => (
-            <tr key={r.id} className="border-t border-line">
-              <td className="tabular px-4 py-2.5 font-semibold sm:px-0">{r.case_no}</td>
-              <td className="px-2 py-2.5">
-                {r.requester_name}
-                <span className="text-muted">
-                  {' '}
-                  · <Users className="inline size-3.5" aria-label="จำนวนคน" /> {r.people_count}
-                </span>
-              </td>
-              <td className="px-2 py-2.5"><UrgencyBadge urgency={r.urgency} /></td>
-              <td className="px-2 py-2.5"><StatusBadge status={r.status} /></td>
-              <td className="px-2 py-2.5 text-muted">{r.rescuer_team || '-'}</td>
-              <td className="px-4 py-2.5 text-right text-muted sm:px-0">{timeAgo(r.created_at)}</td>
+    <>
+      <ul className="flex flex-col gap-3 md:hidden">
+        {recent.map((r) => (
+          <li key={r.id} className="min-w-0 rounded-lg border border-line p-3 text-base break-words">
+            <p className="font-semibold tabular-nums">{r.case_no}</p>
+            <p className="mt-1">
+              {r.requester_name}
+              <span className="text-t2">
+                {' '}· <UsersIcon size={14} className="inline align-[-2px]" aria-label="จำนวนคน" /> {r.people_count}
+              </span>
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <UrgencyBadge urgency={r.urgency} />
+              <CaseStatusBadge status={r.status} />
+            </div>
+            <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
+              <dt className="text-t2">ทีม</dt>
+              <dd>{r.rescuer_team || '-'}</dd>
+              <dt className="text-t2">แจ้งเมื่อ</dt>
+              <dd>{timeAgo(r.created_at)}</dd>
+            </dl>
+          </li>
+        ))}
+      </ul>
+      <div className="-mx-4 hidden overflow-x-auto sm:mx-0 md:block">
+        <table className="w-full min-w-[640px] text-left text-base">
+          <thead className="text-t2">
+            <tr>
+              <th className="px-4 py-2 font-medium sm:px-0">เคส</th>
+              <th className="px-2 py-2 font-medium">ผู้แจ้ง</th>
+              <th className="px-2 py-2 font-medium">ความเร่งด่วน</th>
+              <th className="px-2 py-2 font-medium">สถานะ</th>
+              <th className="px-2 py-2 font-medium">ทีม</th>
+              <th className="px-4 py-2 text-right font-medium sm:px-0">แจ้งเมื่อ</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {recent.map((r) => (
+              <tr key={r.id} className="border-t border-line">
+                <td className="tabular-nums px-4 py-2.5 font-semibold sm:px-0">{r.case_no}</td>
+                <td className="px-2 py-2.5">
+                  {r.requester_name}
+                  <span className="text-t2">
+                    {' '}
+                    · <UsersIcon size={14} className="inline align-[-2px]" aria-label="จำนวนคน" /> {r.people_count}
+                  </span>
+                </td>
+                <td className="px-2 py-2.5"><UrgencyBadge urgency={r.urgency} /></td>
+                <td className="px-2 py-2.5"><CaseStatusBadge status={r.status} /></td>
+                <td className="px-2 py-2.5 text-t2">{r.rescuer_team || '-'}</td>
+                <td className="px-4 py-2.5 text-right text-t2 sm:px-0">{timeAgo(r.created_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }

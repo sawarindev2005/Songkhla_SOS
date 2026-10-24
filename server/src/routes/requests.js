@@ -1,11 +1,13 @@
 const router = require('express').Router();
 const pool = require('../db');
-const { verifyToken, requireRole } = require('../middleware/auth');
+const { verifyToken, requireRole, readRequesterCases, addRequesterCase } = require('../middleware/auth');
 const { httpError, requireLatLng } = require('../utils');
 
 const URGENCIES = ['low', 'medium', 'high', 'critical'];
 const STATUSES = ['pending', 'assigned', 'in_progress', 'rescued', 'cancelled'];
 const ACTIVE = "('pending','assigned','in_progress')";
+// ผู้แจ้งยกเลิกเองได้ก่อนทีมเริ่มเข้าช่วยเหลือ
+const CANCELLABLE = ['pending', 'assigned'];
 
 // ข้อมูลที่เปิดให้ประชาชนเห็นบนแผนที่ (ไม่มีเบอร์โทร)
 const PUBLIC_FIELDS = `r.id, r.case_no, r.people_count, r.has_elderly, r.has_children, r.has_disabled,
@@ -58,6 +60,7 @@ router.post('/', async (req, res) => {
     const caseNo = `HY-${String(result.insertId).padStart(5, '0')}`;
     await conn.query('UPDATE help_requests SET case_no = ? WHERE id = ?', [caseNo, result.insertId]);
     await conn.commit();
+    addRequesterCase(req, res, result.insertId);
     res.status(201).json({ id: result.insertId, case_no: caseNo });
   } catch (err) {
     await conn.rollback();
@@ -78,8 +81,27 @@ router.get('/track/:caseNo', async (req, res) => {
      WHERE r.case_no = ?`,
     [String(req.params.caseNo).trim().toUpperCase()]
   );
-  if (!rows[0]) throw httpError(404, 'ไม่พบเลขเคสนี้ กรุณาตรวจสอบอีกครั้ง');
-  res.json(rows[0]);
+  const row = rows[0];
+  if (!row) throw httpError(404, 'ไม่พบเลขเคสนี้ กรุณาตรวจสอบอีกครั้ง');
+  row.can_cancel = CANCELLABLE.includes(row.status) && readRequesterCases(req).includes(row.id);
+  res.json(row);
+});
+
+// ผู้แจ้งยกเลิกเคสของตัวเอง — ยืนยันความเป็นเจ้าของจาก JWT ในคุกกี้ hy_requester
+// ตอบ 403 ไม่ใช่ 401 เพื่อไม่ให้ client พาไปหน้า login เจ้าหน้าที่
+// WHERE status กันชนกับทีมที่เพิ่งกดเริ่มช่วยเหลือพร้อมกัน
+router.patch('/:id/cancel', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!readRequesterCases(req).includes(id)) throw httpError(403, 'ยกเลิกได้เฉพาะเคสที่แจ้งจากเครื่องนี้');
+  const [result] = await pool.query(
+    `UPDATE help_requests SET status = 'cancelled', resolved_at = NOW()
+     WHERE id = ? AND status IN (?)`,
+    [id, CANCELLABLE]
+  );
+  if (result.affectedRows === 0) {
+    throw httpError(409, 'ยกเลิกไม่ได้ ทีมกำลังเข้าช่วยเหลือหรือเคสปิดไปแล้ว หากไม่ต้องการความช่วยเหลือแล้ว กรุณาโทรแจ้งทีม');
+  }
+  res.json({ id, status: 'cancelled' });
 });
 
 // ---------- เจ้าหน้าที่ ----------

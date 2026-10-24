@@ -56,4 +56,30 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { signToken, setAuthCookie, clearAuthCookie, verifyToken, requireRole };
+// ---------- ผู้แจ้ง (ประชาชน ไม่มีบัญชี) ----------
+// ส่งคำขอแล้วได้คุกกี้ hy_requester เก็บ id เคสที่แจ้งจากเครื่องนี้ ใช้ยืนยันสิทธิ์ยกเลิกเคสของตัวเอง
+const REQUESTER_COOKIE = 'hy_requester';
+const REQUESTER_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 วัน
+const REQUESTER_MAX_CASES = 10; // เท่ากับจำนวนเคสที่ client เก็บใน localStorage
+
+// คืน id เคสของผู้แจ้งจากคุกกี้ ถ้าไม่มี/ปลอม/หมดอายุ คืน [] (ไม่ throw)
+function readRequesterCases(req) {
+  const token = req.cookies?.[REQUESTER_COOKIE];
+  if (!token) return [];
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    return payload.typ === 'requester' && Array.isArray(payload.cases) ? payload.cases.map(Number) : [];
+  } catch {
+    return [];
+  }
+}
+
+function addRequesterCase(req, res, id) {
+  const cases = [id, ...readRequesterCases(req).filter((c) => c !== id)].slice(0, REQUESTER_MAX_CASES);
+  const token = jwt.sign({ typ: 'requester', cases }, process.env.JWT_SECRET, { expiresIn: '7d' });
+  res.cookie(REQUESTER_COOKIE, token, { ...cookieOptions(), path: '/api/requests', maxAge: REQUESTER_MAX_AGE });
+}
+
+module.exports = {
+  signToken, setAuthCookie, clearAuthCookie, verifyToken, requireRole, readRequesterCases, addRequesterCase,
+};

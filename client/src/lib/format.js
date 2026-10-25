@@ -33,6 +33,20 @@ export const VULNERABLE = [
   { key: 'has_patient', label: 'ผู้ป่วย/ติดเตียง' },
 ];
 
+// อุปกรณ์ของทีมกู้ภัย (key ตรงกับ EQUIPMENT ใน server/src/utils.js)
+export const EQUIPMENT = [
+  { key: 'boat', label: 'เรือ' },
+  { key: 'truck', label: 'รถยกสูง' },
+  { key: 'pickup', label: 'รถกระบะ' },
+  { key: 'first_aid', label: 'ชุดปฐมพยาบาล' },
+];
+
+// "boat,pickup" → "เรือ, รถกระบะ"
+export function equipmentLabel(value) {
+  const keys = String(value || '').split(',');
+  return EQUIPMENT.filter((e) => keys.includes(e.key)).map((e) => e.label).join(', ');
+}
+
 export const HOTLINES = [
   { number: '1669', label: 'เจ็บป่วยฉุกเฉิน' },
   { number: '1784', label: 'ปภ. สาธารณภัย' },

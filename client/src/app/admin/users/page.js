@@ -18,9 +18,15 @@ import {
 import { usePolling } from '@/hooks/usePolling';
 import { api } from '@/lib/api';
 import { ROLE_LABEL, useAuth } from '@/lib/auth';
-import { formatDateTime, timeAgo } from '@/lib/format';
+import { EQUIPMENT, equipmentLabel, formatDateTime, timeAgo } from '@/lib/format';
 
-const EMPTY = { username: '', full_name: '', phone: '', role: 'rescuer', team_name: '', password: '', is_active: true };
+const EMPTY = {
+  username: '', full_name: '', phone: '', role: 'rescuer', team_name: '', password: '', is_active: true,
+  team_size: '', equipment: [], service_area: '',
+};
+
+// "ทีม" ในรายการ: ชื่อทีม + จำนวนสมาชิก
+const teamText = (u) => [u.team_name, u.team_size && `${u.team_size} คน`].filter(Boolean).join(' · ') || '-';
 
 function validate(form, isNew) {
   const errors = {};
@@ -29,6 +35,8 @@ function validate(form, isNew) {
   }
   if (!form.full_name.trim()) errors.full_name = 'กรุณากรอกชื่อ-นามสกุล';
   if ((isNew || form.password) && form.password.length < 8) errors.password = 'อย่างน้อย 8 ตัวอักษร';
+  const size = Number(form.team_size);
+  if (form.team_size !== '' && (!Number.isInteger(size) || size < 1 || size > 999)) errors.team_size = '1–999 คน';
   return errors;
 }
 
@@ -55,7 +63,13 @@ export default function UsersPage() {
     setSaveError(null);
     setEditing(
       u
-        ? { id: u.id, form: { ...EMPTY, ...u, phone: u.phone || '', team_name: u.team_name || '', password: '', is_active: Boolean(u.is_active) } }
+        ? {
+            id: u.id,
+            form: {
+              ...EMPTY, ...u, phone: u.phone || '', team_name: u.team_name || '', password: '', is_active: Boolean(u.is_active),
+              team_size: u.team_size ?? '', equipment: u.equipment ? u.equipment.split(',') : [], service_area: u.service_area || '',
+            },
+          }
         : { form: { ...EMPTY } }
     );
   }
@@ -70,10 +84,14 @@ export default function UsersPage() {
     setErrors(errs);
     if (Object.keys(errs).length) return;
 
-    const { username, full_name, phone, role, team_name, password, is_active } = editing.form;
+    const { username, full_name, phone, role, team_name, password, is_active, team_size, equipment, service_area } = editing.form;
+    // ข้อมูลทีมใช้เฉพาะกู้ภัย บทบาทอื่นล้างทิ้ง
+    const rescuer = role === 'rescuer'
+      ? { team_size, equipment, service_area }
+      : { team_size: '', equipment: [], service_area: '' };
     const body = isNew
-      ? { username: username.trim().toLowerCase(), full_name, phone, role, team_name, password }
-      : { full_name, phone, role, team_name, is_active, ...(password ? { password } : {}) };
+      ? { username: username.trim().toLowerCase(), full_name, phone, role, team_name, password, ...rescuer }
+      : { full_name, phone, role, team_name, is_active, ...rescuer, ...(password ? { password } : {}) };
 
     setSaving(true);
     setSaveError(null);
@@ -172,7 +190,15 @@ export default function UsersPage() {
                 </div>
                 <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
                   <dt className="text-t2">ทีม</dt>
-                  <dd>{u.team_name || '-'}</dd>
+                  <dd>{teamText(u)}</dd>
+                  {u.role === 'rescuer' && (
+                    <>
+                      <dt className="text-t2">อุปกรณ์</dt>
+                      <dd>{equipmentLabel(u.equipment) || '-'}</dd>
+                      <dt className="text-t2">พื้นที่</dt>
+                      <dd>{u.service_area || '-'}</dd>
+                    </>
+                  )}
                   <dt className="text-t2">เบอร์โทร</dt>
                   <dd className="tabular-nums">{u.phone || '-'}</dd>
                   <dt className="text-t2">ตำแหน่งล่าสุด</dt>
@@ -242,7 +268,12 @@ export default function UsersPage() {
                       <Badge boxed>{ROLE_LABEL[u.role]}</Badge>
                     </td>
                     <td className="px-4 py-3">
-                      <p>{u.team_name || '-'}</p>
+                      <p>{teamText(u)}</p>
+                      {u.role === 'rescuer' && (u.equipment || u.service_area) && (
+                        <p className="text-sm text-t2">
+                          {[equipmentLabel(u.equipment), u.service_area].filter(Boolean).join(' · ')}
+                        </p>
+                      )}
                       <p className="text-t2 tabular-nums">{u.phone || '-'}</p>
                     </td>
                     <td className="px-4 py-3">
@@ -350,6 +381,44 @@ export default function UsersPage() {
             <Field label="ชื่อทีม / หน่วยงาน" className="sm:col-span-2" hint="เช่น มูลนิธิกู้ภัยหาดใหญ่ ทีม A">
               {(p) => <input {...p} className={inputClass} value={f.team_name} onChange={set('team_name')} />}
             </Field>
+            {f.role === 'rescuer' && (
+              <>
+                <Field label="จำนวนสมาชิกในทีม" error={errors.team_size}>
+                  {(p) => (
+                    <input
+                      {...p}
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={999}
+                      className={inputClass}
+                      value={f.team_size}
+                      onChange={set('team_size')}
+                    />
+                  )}
+                </Field>
+                <Field label="พื้นที่ที่รับผิดชอบ">
+                  {(p) => <input {...p} className={inputClass} value={f.service_area} onChange={set('service_area')} maxLength={255} />}
+                </Field>
+                <fieldset className="flex flex-col gap-1 sm:col-span-2">
+                  <legend className="mb-1 text-base font-medium">อุปกรณ์</legend>
+                  <div className="grid grid-cols-2 gap-x-3">
+                    {EQUIPMENT.map((eq) => (
+                      <Checkbox
+                        key={eq.key}
+                        checked={f.equipment.includes(eq.key)}
+                        onChange={(v) =>
+                          setValue('equipment', v ? [...f.equipment, eq.key] : f.equipment.filter((k) => k !== eq.key))
+                        }
+                        className="min-h-11 cursor-pointer text-base font-medium"
+                      >
+                        {eq.label}
+                      </Checkbox>
+                    ))}
+                  </div>
+                </fieldset>
+              </>
+            )}
             <Field
               label={editing.id ? 'รีเซ็ตรหัสผ่าน' : 'รหัสผ่าน'}
               required={!editing.id}

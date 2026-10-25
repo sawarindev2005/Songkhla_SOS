@@ -13,16 +13,19 @@ import {
   PathIcon,
   SignOutIcon,
   SquaresFourIcon,
+  UserPlusIcon,
   UsersIcon,
   XIcon,
 } from './pk/icons';
 import { Spinner } from './pk/Spinner';
 import { cn } from './pk/cn';
+import { usePolling } from '@/hooks/usePolling';
 import { ROLE_LABEL, useAuth, useRequireRole } from '@/lib/auth';
 
 const COMMAND_ITEMS = [
   { href: '/command', label: 'Dashboard ศูนย์บัญชาการ', icon: SquaresFourIcon },
   { href: '/command/assign', label: 'มอบหมายเคส', icon: PathIcon },
+  { href: '/command/applications', label: 'อนุมัติอาสากู้ภัย', icon: UserPlusIcon },
   { href: '/command/shelters', label: 'จัดการที่พักพิง', icon: HouseLineIcon },
   { href: '/command/distributions', label: 'จัดการจุดแจกจ่าย', icon: PackageIcon },
 ];
@@ -32,10 +35,12 @@ const ADMIN_ITEMS = [
   { href: '/admin/users', label: 'จัดการบัญชีผู้ใช้', icon: UsersIcon },
 ];
 
-function NavList({ items, pathname, onNavigate }) {
+// badges = { [href]: จำนวน } แสดงตัวเลขท้ายเมนู เช่น ใบสมัครที่รออนุมัติ
+function NavList({ items, pathname, onNavigate, badges = {} }) {
   return (
     <ul className="flex flex-col gap-1">
       {items.map(({ href, label, icon: Icon }) => {
+        const count = badges[href];
         const active = pathname === href;
         return (
           <li key={href}>
@@ -49,7 +54,13 @@ function NavList({ items, pathname, onNavigate }) {
               )}
             >
               <Icon size={20} weight={active ? 'fill' : 'regular'} className="shrink-0" aria-hidden />
-              {label}
+              <span className="min-w-0 flex-1">{label}</span>
+              {count > 0 && (
+                <span className="rounded-full bg-red px-2 py-0.5 text-xs font-bold text-white tabular-nums">
+                  {count}
+                  <span className="sr-only"> รายการรอดำเนินการ</span>
+                </span>
+              )}
             </Link>
           </li>
         );
@@ -70,6 +81,7 @@ function NavGroup({ title, children }) {
 export default function StaffShell({ roles, children }) {
   const { user, allowed } = useRequireRole(roles);
   const { logout } = useAuth();
+  const { data: pending } = usePolling('/applications/pending-count', { interval: 60000, enabled: allowed });
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -116,7 +128,12 @@ export default function StaffShell({ roles, children }) {
           </NavGroup>
         )}
         <NavGroup title="ศูนย์บัญชาการ">
-          <NavList items={COMMAND_ITEMS} pathname={pathname} onNavigate={close} />
+          <NavList
+            items={COMMAND_ITEMS}
+            pathname={pathname}
+            onNavigate={close}
+            badges={{ '/command/applications': pending?.count }}
+          />
         </NavGroup>
         <NavGroup title="หน้าสาธารณะ">
           <NavList items={[{ href: '/', label: 'แผนที่ประชาชน', icon: MapTrifoldIcon }]} pathname={pathname} onNavigate={close} />

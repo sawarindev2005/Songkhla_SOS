@@ -109,7 +109,12 @@ export default function LoginPage() {
           <Button type="submit" loading={loading} icon={<SignInIcon size={20} weight="bold" aria-hidden />}>
             เข้าสู่ระบบ
           </Button>
-          <p className="text-center text-base text-t2">ยังไม่มีบัญชี? ติดต่อผู้ดูแลระบบเพื่อขอสร้างบัญชี</p>
+          <p className="text-center text-base text-t2">
+            ยังไม่มีบัญชี?{' '}
+            <Link href="/register" className="inline-flex min-h-11 items-center font-semibold text-acc underline">
+              สมัครเป็นอาสากู้ภัย
+            </Link>
+          </p>
         </form>
       </div>
     </main>

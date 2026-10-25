@@ -3,6 +3,11 @@
 - `client/` is Next 16.4 / React 19; read `client/AGENTS.md` before UI changes. `server/` is Express 5 with MySQL through `server/src/db.js`. Existing API startup: `node src/index.js` from `server`; client verification: `npm.cmd run lint` and `npm.cmd run build` from `client`.
 - Preserve local edits when checking upstream work; do not overwrite whole files with upstream versions. Independent local preview copies are not deployed or merged code.
 
+## Rescuer applications and upstream integration
+
+- Public `/register` submits rescuer applications; command/admin review them at `/command/applications`. `StaffShell` polls the pending count while preserving the shared guarded logout and toast behavior. Admin account editors normalize comma-separated equipment into checkbox arrays before capturing their unsaved-form snapshot.
+- Existing databases need `server/sql/migrate-rescuer-applications.sql` before starting the integrated API: it adds nullable `users.team_size`, `users.equipment`, `users.service_area`, and the `rescuer_applications` table. Its `ALTER TABLE` is not repeatable; inspect existing columns before running it. Preserve existing rows and apply only after approval and backup, separately from the announcement migration. New installations use the combined schema.
+
 ## Admin-authored announcements
 
 - `server/src/routes/announcements.js` exports `announcementRouter(db)` for real SQL use and isolated HTTP tests. The public route is `GET /api/announcements/public`; all other announcement routes require the existing JWT cookie and **admin** role. Command/rescuer accounts cannot read drafts or write announcements.

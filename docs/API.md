@@ -76,8 +76,6 @@
 | PATCH | `/applications/:id/approve` | 🔒 command, admin | สร้างบัญชีกู้ภัยจากใบสมัคร (ใช้รหัสผ่านที่ผู้สมัครตั้งไว้) — พิจารณาไปแล้วได้ 409 |
 | PATCH | `/applications/:id/reject` | 🔒 command, admin | body `{ reason }` (บังคับ) ผู้สมัครเห็นเหตุผลตอนพยายาม login |
 
-ฐานข้อมูลเดิม: รัน `server/sql/migrate-rescuer-applications.sql` ครั้งเดียวก่อนใช้งาน
-
 ## 5. แดชบอร์ด — `server/src/routes/dashboard.js`
 
 | Method | Path | สิทธิ์ | ทำอะไร |
@@ -97,7 +95,7 @@
 | Status | ความหมาย |
 |---|---|
 | 400 | ข้อมูลไม่ถูกต้อง |
-| 401 | ไม่มีคุกกี้ token / token หมดอายุหรือไม่ถูกต้อง / รหัสผ่านผิด |
+| 401 | ไม่มีคุกกี้ `hy_token` / token หมดอายุหรือไม่ถูกต้อง / รหัสผ่านผิด |
 | 403 | บทบาทไม่มีสิทธิ์ หรือบัญชีถูกระงับ |
 | 404 | ไม่พบข้อมูล หรือไม่มี API นี้ |
 | 409 | ข้อมูลชนกัน (เคสถูกรับไปแล้ว, username ซ้ำ) |
@@ -107,81 +105,131 @@
 
 ---
 
-# JWT ใช้ตรงไหน
+# Cookies และ JWT ใช้ตรงไหน
 
-## ภาพรวมการทำงาน
+## สรุปสั้น
+
+ระบบใช้ **JWT 2 ตัว** เก็บใน **คุกกี้ HttpOnly 2 ใบ** เซ็นด้วย `JWT_SECRET` เดียวกัน (ไลบรารี `jsonwebtoken`) โค้ดทั้งหมดอยู่ใน `server/src/middleware/auth.js`
+
+| คุกกี้ | ใช้กับใคร | ได้มาตอนไหน | payload ใน JWT | อายุ | `path` | ใช้ทำอะไร |
+|---|---|---|---|---|---|---|
+| `hy_token` | เจ้าหน้าที่ (rescuer / command / admin) | `POST /auth/login` สำเร็จ | `{ id, role, name }` | 12 ชม. (`JWT_EXPIRES_IN`) | `/api` | ยืนยันตัวตนและสิทธิ์ทุก route ที่มี 🔒 |
+| `hy_requester` | ประชาชนผู้แจ้ง (ไม่มีบัญชี) | `POST /requests` สำเร็จ | `{ typ: 'requester', cases: [id, ...] }` | 7 วัน | `/api/requests` | พิสูจน์ว่าเครื่องนี้เป็นผู้แจ้งเคส เพื่อ **ยกเลิกเคสของตัวเอง** |
+
+ทั้งสองใบตั้งค่าด้วย `cookieOptions()` ชุดเดียวกัน
+
+| ค่า | ทำไม |
+|---|---|
+| `httpOnly: true` | JavaScript บนหน้าเว็บอ่าน token ไม่ได้ (`document.cookie` มองไม่เห็น) ถ้ามี XSS ก็ขโมย token ไปใช้ที่อื่นไม่ได้ |
+| `secure` | เปิดเมื่อ `NODE_ENV=production` ให้ส่งคุกกี้ผ่าน HTTPS เท่านั้น (ตอน dev ใช้ http://localhost จึงปิด) |
+| `sameSite: 'lax'` | browser ไม่แนบคุกกี้กับ POST/PATCH/DELETE ที่มาจากเว็บอื่น ช่วยกัน CSRF (localhost:3000 กับ :4000 นับเป็น same-site) |
+| `path` | `hy_token` ส่งเฉพาะ request ที่ขึ้นต้นด้วย `/api` ส่วน `hy_requester` แคบกว่า ส่งเฉพาะ `/api/requests...` |
+| `maxAge` | ให้คุกกี้หมดอายุพร้อม JWT ข้างใน |
+
+> ฝั่ง client **ไม่เคยแตะ token เลย** — browser แนบคุกกี้ให้เองเพราะ `api()` ส่ง `credentials: 'include'` ทุก request และ server ต้องเปิด `cors({ credentials: true })`
+
+## 1) `hy_token` — login ของเจ้าหน้าที่
+
+### ลำดับการทำงาน
 
 ```
 [หน้า /login]  POST /auth/login {username,password}
       │
       ▼
-[server] ตรวจรหัสด้วย bcrypt → setAuthCookie() ตั้งคุกกี้ hy_token (HttpOnly) → ตอบ { user }
+[server] ตรวจรหัสด้วย bcrypt → signToken() สร้าง JWT → setAuthCookie() ตั้งคุกกี้ hy_token → ตอบ { user }
+         (ไม่ส่ง token ใน body ให้ JavaScript เห็น)
       │
       ▼  ทุก request ต่อจากนี้
 [client] api() ใช้ fetch(..., { credentials: 'include' }) browser แนบคุกกี้ให้เอง
       │
       ▼
-[server] cookie-parser อ่านคุกกี้ → verifyToken ถอด token ได้ req.user = { id, role, name }
+[server] cookie-parser อ่านคุกกี้ → verifyToken ถอด JWT ได้ req.user = { id, role, name }
          requireRole(...) → เช็กบทบาท ไม่ผ่านได้ 403
       │
-      ▼  ถ้า token หมดอายุ/ไม่ถูกต้อง → 401
+      ▼  ถ้า token ไม่มี/หมดอายุ/ถูกปลอม → 401
 [client] api() พาไป /login?expired=1
 
 [เปิดเว็บใหม่/รีเฟรช]  AuthProvider เรียก GET /auth/me → ได้ user = ยังล็อกอินอยู่, ได้ 401 = ยังไม่ login
-[logout]              POST /auth/logout → server ลบคุกกี้
+[logout]              POST /auth/logout → server สั่งลบคุกกี้ (JavaScript ลบคุกกี้ HttpOnly เองไม่ได้)
 ```
 
-## เก็บอะไรในคุกกี้
+### route ที่ใช้ `hy_token` (ฝั่ง server)
 
-เก็บ **JWT ตัวเดียว** ในคุกกี้ `hy_token` ตั้งค่าใน `cookieOptions()` (`server/src/middleware/auth.js`)
-
-| ค่า | ทำไม |
+| ไฟล์ | ใช้อย่างไร |
 |---|---|
-| `httpOnly: true` | JavaScript บนหน้าเว็บอ่าน token ไม่ได้ (`document.cookie` มองไม่เห็น) ถ้ามี XSS ก็ขโมย token ไปไม่ได้ |
-| `secure` | เปิดเมื่อ `NODE_ENV=production` ให้ส่งคุกกี้ผ่าน HTTPS เท่านั้น (ตอน dev ใช้ http://localhost จึงปิด) |
-| `sameSite: 'lax'` | browser ไม่แนบคุกกี้กับ POST/PATCH/DELETE ที่มาจากเว็บอื่น ช่วยกัน CSRF (localhost:3000 กับ :4000 นับเป็น same-site) |
-| `path: '/api'` | ส่งคุกกี้เฉพาะ request ที่ขึ้นต้นด้วย `/api` |
-| `maxAge: 12 ชม.` | ให้คุกกี้หมดอายุพร้อม JWT |
+| `server/src/middleware/auth.js` | **`signToken(user)`** สร้าง JWT · **`setAuthCookie` / `clearAuthCookie`** ตั้ง/ลบคุกกี้ · **`verifyToken`** อ่าน `req.cookies.hy_token` แล้ว `jwt.verify()` ผ่านแล้วแนบ `req.user` ไม่ผ่านตอบ 401 · **`requireRole(...roles)`** เช็ก `req.user.role` ไม่ตรงตอบ 403 |
+| `server/src/index.js` | `cors({ origin, credentials: true })`, `app.use(cookieParser())` และไม่ยอมเปิดเซิร์ฟเวอร์ถ้าไม่ได้ตั้ง `JWT_SECRET` |
+| `server/src/routes/auth.js` | `/login` เรียก `setAuthCookie`, `/logout` เรียก `clearAuthCookie`, `/me` ใช้ `verifyToken` |
+| `server/src/routes/requests.js` | `router.use(verifyToken)` — route **ใต้บรรทัดนี้** ต้องมี token (`GET /requests`, `/mine`, `/accept`, `/assign`, `/status`) ส่วน route สาธารณะประกาศไว้ก่อนบรรทัดนี้ |
+| `server/src/routes/users.js` | `GET /rescuers/public` สาธารณะ → `router.use(verifyToken)` → `me/location` (rescuer), `rescuers` (command, admin) → `router.use(requireRole('admin'))` สำหรับจัดการบัญชี |
+| `server/src/routes/applications.js` | `POST /applications` สาธารณะ → `router.use(verifyToken, requireRole('command','admin'))` สำหรับดู/อนุมัติ/ปฏิเสธใบสมัคร |
+| `server/src/routes/placeRouter.js` | `canEdit = [verifyToken, requireRole('command','admin')]` ใช้กับ POST/PATCH/DELETE ของที่พักพิงและจุดแจกจ่าย |
+| `server/src/routes/dashboard.js` | `/dashboard/summary` ใช้ `verifyToken, requireRole('command','admin')` |
+| `server/src/routes/announcements.js` | `GET /public` สาธารณะ → `router.use(verifyToken, requireRole('admin'))` สำหรับจัดการประกาศ |
+
+handler หลายตัวใช้ **`req.user.id`** ที่ได้จาก JWT แทนการรับจาก body (กันปลอมตัว) เช่น รับเคส (`accept`), เคสของฉัน (`mine`), อัปเดตตำแหน่ง (`me/location`), `assigned_by` ตอนมอบหมาย, `created_by` ตอนเพิ่มสถานที่/ประกาศ, `reviewed_by` ตอนพิจารณาใบสมัคร และกันแอดมินลบ/ระงับ/ลดสิทธิ์ตัวเอง
+
+### ฝั่ง client
+
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `client/src/lib/api.js` | `api()` ส่ง `credentials: 'include'` ทุก request ได้ 401 → ไป `/login?expired=1` ยกเว้นส่ง `redirectOn401: false` (เช่น เช็ก session, login รหัสผิด, ยกเลิกเคส) |
+| `client/src/lib/auth.js` | `AuthProvider` เรียก `/auth/me` ตอนเปิดเว็บ, `login()` / `logout()`, `useLogout()` ล้าง user หลัง server ลบคุกกี้สำเร็จเท่านั้น, `useRequireRole(roles)` กันหน้าตามบทบาท |
+| `client/src/components/StaffShell.jsx`, `client/src/app/rescuer/layout.js` | ใช้ `useRequireRole` กันหน้า command/admin และ rescuer |
+| `client/src/app/login/page.js` | ฟอร์ม login เรียก `login()` แล้วพาไปหน้าตาม `ROLE_HOME` |
+| `client/src/components/pk/PublicShell.jsx` | หน้าประชาชนอ่าน `user` เพื่อเปลี่ยนแท็บขวาสุดเป็น "หน้าเจ้าหน้าที่" |
 
 ข้อมูลผู้ใช้ (ชื่อ, บทบาท ฯลฯ) **ไม่ได้เก็บในคุกกี้หรือ localStorage** — client ขอจาก `/auth/me` แล้วเก็บไว้ใน React state เท่านั้น
 
-## ฝั่ง server
-
-| ไฟล์ | หน้าที่ |
-|---|---|
-| `server/src/middleware/auth.js` | **`signToken(user)`** สร้าง token ด้วย `jsonwebtoken` ใส่ payload `{ id, role, name }` เซ็นด้วย `JWT_SECRET` อายุตาม `JWT_EXPIRES_IN` (ค่าเริ่มต้น `12h`) |
-| `server/src/middleware/auth.js` | **`cookieOptions()`**, **`setAuthCookie(res, user)`**, **`clearAuthCookie(res)`** ตั้ง/ลบคุกกี้ `hy_token` |
-| `server/src/middleware/auth.js` | **`verifyToken`** อ่าน `req.cookies.hy_token` แล้ว `jwt.verify()` ผ่านแล้วแนบ `req.user` ไม่ผ่านตอบ 401 |
-| `server/src/middleware/auth.js` | **`requireRole(...roles)`** ใช้ต่อจาก `verifyToken` เช็ก `req.user.role` ไม่ตรงตอบ 403 |
-| `server/src/index.js` | `cors({ origin, credentials: true })` ให้รับ/ส่งคุกกี้ข้าม origin ได้ และ `app.use(cookieParser())` |
-| `server/src/routes/auth.js` | `/login` เรียก `setAuthCookie` (ไม่ส่ง token ใน body), `/logout` เรียก `clearAuthCookie`, `/me` ใช้ `verifyToken` |
-| `server/src/routes/requests.js` | `router.use(verifyToken)` — ทุก route **ที่อยู่ใต้บรรทัดนี้** ต้องมี token (route สาธารณะประกาศไว้ก่อนบรรทัดนี้) |
-| `server/src/routes/users.js` | `router.use(verifyToken)` แล้วต่อด้วย `router.use(requireRole('admin'))` สำหรับส่วนจัดการบัญชี |
-| `server/src/routes/placeRouter.js` | `canEdit = [verifyToken, requireRole('command','admin')]` ใช้กับ POST/PATCH/DELETE |
-| `server/src/routes/dashboard.js` | `/dashboard/summary` ใช้ `verifyToken, requireRole('command','admin')` |
-| `server/src/index.js` | ถ้าไม่ได้ตั้ง `JWT_SECRET` เซิร์ฟเวอร์จะไม่ยอมเปิด |
-| `server/.env` | `JWT_SECRET` (คีย์เซ็น ต้องเป็นค่าสุ่มยาวๆ), `JWT_EXPIRES_IN`, `NODE_ENV=production` ตอนขึ้นจริงเพื่อเปิด `secure` |
-
-นอกจากนี้ handler หลายตัวใช้ `req.user.id` ที่ได้จาก token เช่น รับเคส (`accept`), เคสของฉัน (`mine`), อัปเดตตำแหน่ง (`me/location`), `created_by` ตอนเพิ่มสถานที่ และกันแอดมินลบ/ระงับตัวเอง
-
-## ฝั่ง client
-
-| ไฟล์ | หน้าที่ |
-|---|---|
-| `client/src/lib/api.js` | `api()` ส่ง `credentials: 'include'` ทุก request (ไม่ได้แตะ token เอง) ได้ 401 → ไป `/login?expired=1` ยกเว้นส่ง `redirectOn401: false` |
-| `client/src/lib/auth.js` | `AuthProvider` เรียก `/auth/me` ตอนเปิดเว็บ, `login()` เรียก `/auth/login` แล้วเก็บ `user` ใน state, `logout()` เรียก `/auth/logout` |
-| `client/src/lib/auth.js` | `useRequireRole(roles)` กันหน้าตามบทบาทฝั่ง client (ไม่มี login → `/login`, บทบาทไม่ตรง → หน้าของบทบาทตัวเอง) ใช้ใน `client/src/app/rescuer/layout.js` และ `client/src/components/StaffShell.jsx` |
-| `client/src/app/login/page.js` | ฟอร์ม login เรียก `login()` แล้วพาไปหน้าตาม `ROLE_HOME` |
-| `client/src/components/pk/PublicShell.jsx` | หน้าคนทั่วไปอ่าน `user` เพื่อเปลี่ยนแท็บขวาสุดเป็น "หน้าเจ้าหน้าที่" |
-
 > การกันหน้าฝั่ง client มีไว้เพื่อ UX เท่านั้น สิทธิ์จริงตรวจที่ server ทุก request ผ่าน `verifyToken` + `requireRole`
+
+## 2) `hy_requester` — ผู้แจ้งยกเลิกเคสของตัวเอง
+
+ประชาชนไม่มีบัญชี จึงใช้ JWT อีกตัวพิสูจน์ว่า "เครื่องนี้เป็นคนแจ้งเคสนี้"
+
+```
+[หน้า /request]  POST /requests
+      │
+      ▼
+[server] บันทึกเคส → addRequesterCase() อ่าน id เคสเดิมจากคุกกี้ + ใส่ id ใหม่ไว้หน้าสุด (เก็บสูงสุด 10 เคส)
+         → เซ็น JWT ใหม่ { typ:'requester', cases:[...] } อายุ 7 วัน → ตั้งคุกกี้ hy_requester
+      │
+      ▼
+[หน้า /track]  GET /requests/track/:caseNo
+[server] readRequesterCases() → can_cancel = สถานะยังเป็น pending/assigned และ id อยู่ในคุกกี้
+      │
+      ▼  ถ้า can_cancel = true จะเห็นปุ่มยกเลิก
+[client] api(`/requests/${id}/cancel`, { method:'PATCH', redirectOn401:false })
+[server] id ไม่อยู่ในคุกกี้ → 403 (ไม่ใช่ 401 เพื่อไม่ให้ client พาไปหน้า login เจ้าหน้าที่)
+         ทีมเริ่มช่วยเหลือไปแล้ว → 409
+```
+
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `server/src/middleware/auth.js` | **`addRequesterCase(req, res, id)`** เพิ่มเคสแล้วเซ็นคุกกี้ใหม่ · **`readRequesterCases(req)`** ถอดคุกกี้ ถ้าไม่มี/ปลอม/หมดอายุ/`typ` ไม่ใช่ `requester` คืน `[]` (ไม่ throw) |
+| `server/src/routes/requests.js` | `POST /` ตั้งคุกกี้, `GET /track/:caseNo` คำนวณ `can_cancel`, `PATCH /:id/cancel` เช็กสิทธิ์จากคุกกี้ |
+| `client/src/app/(public)/track/page.js` | แสดงปุ่มยกเลิกตาม `can_cancel` และเรียก `/cancel` |
+
+`typ: 'requester'` กันไม่ให้เอา JWT ตัวนี้ไปใช้แทน `hy_token` (และ `hy_token` ไม่มี `cases` จึงใช้แทน `hy_requester` ไม่ได้)
+
+## 3) localStorage (ไม่ใช่คุกกี้ และไม่มี JWT)
+
+| key | เก็บอะไร | ใช้ที่ |
+|---|---|---|
+| `hy_my_cases` | เลขเคส (`HY-xxxxx`) ที่เครื่องนี้แจ้ง สูงสุด 10 เคส | การ์ด "เคสที่ฉันแจ้ง" และหน้า `/track` (`client/src/lib/format.js`, `useVisibleMyCases.js`) |
+| `hy_dismissed_cases` | เลขเคสที่ผู้ใช้กดซ่อนการ์ด | `useVisibleMyCases.js` |
+
+ข้อมูลนี้ใช้แสดงผลอย่างเดียว ไม่ได้ให้สิทธิ์อะไร — สิทธิ์ยกเลิกเคสมาจากคุกกี้ `hy_requester` ที่ server เซ็นเท่านั้น
 
 ## ข้อควรรู้
 
 - **token ไม่ถูกเพิกถอนทันที**: `verifyToken` เชื่อ `role` ใน token โดยไม่เช็กฐานข้อมูล ถ้าแอดมินระงับบัญชีหรือเปลี่ยนบทบาท token เดิมยังเรียก API ได้จนหมดอายุ (สูงสุด `JWT_EXPIRES_IN`) แต่ตอนรีเฟรชหน้า `/auth/me` จะเช็ก `is_active` และไม่ให้เข้า
 - token อยู่ในคุกกี้ HttpOnly JavaScript อ่านไม่ได้ แต่ XSS ยังสั่ง request ในนามผู้ใช้ได้ระหว่างที่เปิดหน้าอยู่ — HttpOnly กันการ "ขโมย token ไปใช้ที่อื่น" ไม่ได้กัน XSS ทั้งหมด
 - ถ้าเปลี่ยน `JWT_EXPIRES_IN` ควรแก้ `COOKIE_MAX_AGE` ใน `server/src/middleware/auth.js` ให้ตรงกันด้วย
-- ถ้าเปลี่ยน `JWT_SECRET` ทุกคนต้อง login ใหม่ (token เก่าใช้ไม่ได้ทั้งหมด)
+- ถ้าเปลี่ยน `JWT_SECRET` ทุกคนต้อง login ใหม่ และผู้แจ้งจะยกเลิกเคสเดิมจากเว็บไม่ได้ (token เก่าใช้ไม่ได้ทั้งหมด)
+- ล้างคุกกี้ browser หรือเปลี่ยนเครื่อง = เสียสิทธิ์ยกเลิกเคสผ่านเว็บ ต้องโทรแจ้งทีมแทน
+- ค่าใน `server/.env`: `JWT_SECRET` (คีย์เซ็น ต้องเป็นค่าสุ่มยาวๆ), `JWT_EXPIRES_IN`, และ `NODE_ENV=production` ตอนขึ้นจริงเพื่อเปิด `secure`
+
 # Admin-authored public announcements
 
 - `GET /announcements/public`: public, published entries only, newest publication first (maximum 50), `Cache-Control: no-store`.
@@ -190,4 +238,4 @@
 - `PATCH /announcements/:id`: admin only; validates supplied fields. `is_published: true` publishes a hidden entry with a new publication time; `false` hides it from the public feed.
 - `DELETE /announcements/:id`: admin only; permanently deletes the announcement. The admin UI confirms first and offers hiding as the reversible alternative.
 - Responses include announcement content, state/timestamps, and `author_name` via a LEFT JOIN to users; deleted author accounts do not delete announcements. No password or session fields are returned.
-- Existing databases require the separately approved `server/sql/migrate-announcements.sql`. Do not apply the destructive fresh-install `schema.sql` to existing data.
+- Storage is `public_announcements` in `server/sql/schema.sql`, the single SQL file for the whole database. Do not apply it to existing data: it drops and recreates the database.

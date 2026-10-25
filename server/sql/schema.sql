@@ -113,8 +113,7 @@ CREATE TABLE rescuer_applications (
   CONSTRAINT fk_app_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
--- ---------- ข้อมูลตัวอย่าง ----------
--- Admin-authored public announcements (new installations only).
+-- 6) ประกาศสาธารณะจากผู้ดูแลระบบ (สร้างใหม่ซ่อนไว้ก่อน กดเผยแพร่จึงขึ้นแถบข่าวหน้าประชาชน)
 CREATE TABLE public_announcements (
   id INT AUTO_INCREMENT PRIMARY KEY,
   title VARCHAR(160) NOT NULL,
@@ -128,6 +127,8 @@ CREATE TABLE public_announcements (
   INDEX idx_announcement_public (is_published, published_at, id),
   CONSTRAINT fk_announcement_author FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 );
+
+-- ---------- ข้อมูลตัวอย่าง ----------
 
 INSERT INTO users (username, password_hash, full_name, phone, role, team_name, current_lat, current_lng, location_updated_at) VALUES
 ('admin',   '$2b$10$LX1RE/NYhOtjDHMrGTDdp.tr0gBtC5f8rfv3IqnI7ikkfq93adHGy', 'ผู้ดูแลระบบ',            '0800000000', 'admin',   NULL, NULL, NULL, NULL),

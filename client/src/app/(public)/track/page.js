@@ -3,15 +3,18 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePolling } from '@/hooks/usePolling';
+import { api } from '@/lib/api';
 import { formatDateTime, formatTime, getMyCases } from '@/lib/format';
 import { Button } from '@/components/pk/Button';
 import { Chip, ChipRow } from '@/components/pk/Chip';
+import { ConfirmDialog } from '@/components/pk/ConfirmDialog';
 import { EmptyState } from '@/components/pk/EmptyState';
 import { RequestPublicDetail } from '@/components/pk/PublicDetail';
 import { TextField } from '@/components/pk/TextField';
+import { useToast } from '@/components/pk/Toast';
 import { cn } from '@/components/pk/cn';
 import {
-  CheckIcon, CircleNotchIcon, LifebuoyIcon, MagnifyingGlassIcon, PhoneIcon, WarningIcon,
+  CheckIcon, CircleNotchIcon, LifebuoyIcon, MagnifyingGlassIcon, PhoneIcon, WarningIcon, XCircleIcon,
 } from '@/components/pk/icons';
 
 const STEPS = [
@@ -38,7 +41,7 @@ export default function TrackPage() {
     }
   }, []);
 
-  const { data, error, loading, updatedAt } = usePolling(
+  const { data, error, loading, updatedAt, refresh } = usePolling(
     caseNo ? `/requests/track/${encodeURIComponent(caseNo)}` : null
   );
 
@@ -154,11 +157,69 @@ export default function TrackPage() {
             <RequestPublicDetail request={data} />
           </section>
 
+          {data.can_cancel && <CancelCase id={data.id} onCancelled={refresh} />}
+
           <p className="text-center font-body text-xs text-t3">
             อัปเดตล่าสุด {formatTime(updatedAt)} · รีเฟรชอัตโนมัติทุก 15 วินาที
           </p>
         </>
       )}
+    </div>
+  );
+}
+
+// ปุ่มยกเลิกคำขอ แสดงเฉพาะเครื่องที่แจ้งเคสนี้ (server ตรวจ JWT ในคุกกี้แล้วส่ง can_cancel มา)
+function CancelCase({ id, onCancelled }) {
+  const toast = useToast();
+  const [confirming, setConfirming] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function cancel() {
+    setSending(true);
+    setError(null);
+    try {
+      await api(`/requests/${id}/cancel`, { method: 'PATCH', redirectOn401: false });
+      setConfirming(false);
+      toast('ยกเลิกคำขอแล้ว');
+      onCancelled();
+    } catch (err) {
+      setConfirming(false);
+      setError(err);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {error && (
+        <p role="alert" className="flex items-start gap-2 text-md font-medium text-red-tx">
+          <WarningIcon size={18} weight="bold" className="mt-0.5 shrink-0" aria-hidden />
+          {error.message}
+        </p>
+      )}
+      <Button
+        variant="dangerOutline"
+        onClick={() => setConfirming(true)}
+        icon={<XCircleIcon size={20} aria-hidden />}
+      >
+        ยกเลิกคำขอความช่วยเหลือ
+      </Button>
+      <ConfirmDialog
+        open={confirming}
+        title="ยกเลิกคำขอนี้?"
+        confirmLabel="ยืนยัน ยกเลิกคำขอ"
+        cancelLabel="ไม่ยกเลิก"
+        confirmVariant="danger"
+        confirmIcon={<XCircleIcon size={20} aria-hidden />}
+        loading={sending}
+        onConfirm={cancel}
+        onCancel={() => setConfirming(false)}
+      >
+        ทีมกู้ภัยจะหยุดเดินทางมาหาคุณ ใช้เมื่อปลอดภัยแล้วหรือได้รับความช่วยเหลือจากช่องทางอื่น
+        หากยังต้องการความช่วยเหลือภายหลัง ต้องแจ้งใหม่
+      </ConfirmDialog>
     </div>
   );
 }

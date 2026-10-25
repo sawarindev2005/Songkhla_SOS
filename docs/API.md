@@ -27,7 +27,8 @@
 |---|---|---|---|
 | GET | `/requests/public` | สาธารณะ | เคสที่ยังไม่จบ (`pending/assigned/in_progress`) สำหรับแผนที่ — **ไม่มีชื่อและเบอร์โทร** |
 | POST | `/requests` | สาธารณะ | ส่งคำขอ body: `requester_name`, `phone` (9–10 หลัก), `lat`, `lng`, `people_count`, `urgency` (`low/medium/high/critical`), `has_elderly/has_children/has_disabled/has_patient`, `description`, `address_note` → `201 { id, case_no }` เลขเคสรูปแบบ `HY-00001` |
-| GET | `/requests/track/:caseNo` | สาธารณะ | ติดตามเคสด้วยเลขเคส + ทีมที่รับ + `queue_ahead` (จำนวนเคสที่รอก่อนหน้า) |
+| GET | `/requests/track/:caseNo` | สาธารณะ | ติดตามเคสด้วยเลขเคส + ทีมที่รับ + `queue_ahead` (จำนวนเคสที่รอก่อนหน้า) + `can_cancel` (เครื่องนี้เป็นผู้แจ้งและยังยกเลิกได้) |
+| PATCH | `/requests/:id/cancel` | ผู้แจ้ง (คุกกี้ `hy_requester`) | ยกเลิกเคสของตัวเอง เฉพาะสถานะ `pending`/`assigned` — คุกกี้ JWT นี้ได้ตอนส่งคำขอ (อายุ 7 วัน เก็บสูงสุด 10 เคส) |
 | GET | `/requests?status=` | 🔒 rescuer, command, admin | ทุกเคสแบบเต็ม (มีชื่อ/เบอร์) `status` = `active` หรือชื่อสถานะ เรียงตามความด่วน |
 | GET | `/requests/mine` | 🔒 rescuer | เคสที่มอบหมายให้ตัวเอง |
 | PATCH | `/requests/:id/accept` | 🔒 rescuer | กดรับเคสเอง (รับได้เฉพาะ `pending` ถ้าทีมอื่นรับไปแล้วได้ 409) |

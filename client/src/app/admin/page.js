@@ -42,7 +42,7 @@ export default function AdminOverview() {
         <div className="mb-4">
           <ErrorBanner
             error={new Error(`โหลด${mapFailed.map(([, name]) => name).join(', ')}ไม่สำเร็จ แผนที่รวมอาจไม่ครบ`)}
-            onRetry={() => mapFailed.forEach(([l]) => l.refresh())}
+            onRetry={() => Promise.all(mapFailed.map(([l]) => l.refresh()))}
           />
         </div>
       )}

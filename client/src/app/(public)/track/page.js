@@ -9,6 +9,7 @@ import { Button } from '@/components/pk/Button';
 import { Chip, ChipRow } from '@/components/pk/Chip';
 import { ConfirmDialog } from '@/components/pk/ConfirmDialog';
 import { EmptyState } from '@/components/pk/EmptyState';
+import { ErrorBanner } from '@/components/pk/ErrorBanner';
 import { RequestPublicDetail } from '@/components/pk/PublicDetail';
 import { TextField } from '@/components/pk/TextField';
 import { useToast } from '@/components/pk/Toast';
@@ -49,14 +50,16 @@ export default function TrackPage() {
     e.preventDefault();
     const value = input.trim().toUpperCase();
     if (!value) return;
-    setCaseNo(value);
-    window.history.replaceState(null, '', `/track?case=${value}`);
+    if (value === caseNo) refresh();
+    else setCaseNo(value);
+    window.history.replaceState(null, '', `/track?case=${encodeURIComponent(value)}`);
   }
 
   function choose(c) {
     setInput(c);
-    setCaseNo(c);
-    window.history.replaceState(null, '', `/track?case=${c}`);
+    if (c === caseNo) refresh();
+    else setCaseNo(c);
+    window.history.replaceState(null, '', `/track?case=${encodeURIComponent(c)}`);
   }
 
   return (
@@ -113,12 +116,7 @@ export default function TrackPage() {
           กำลังโหลด…
         </p>
       )}
-      {caseNo && error && (
-        <p role="alert" className="flex items-start gap-2 text-md font-medium text-red-tx">
-          <WarningIcon size={18} weight="bold" className="mt-0.5 shrink-0" aria-hidden />
-          {error.message}
-        </p>
-      )}
+      {caseNo && <ErrorBanner error={error} onRetry={refresh} />}
 
       {data && (
         <>

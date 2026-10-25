@@ -10,11 +10,15 @@ import { ErrorBanner } from './pk/ErrorBanner';
 import { Field, inputClass } from './pk/Field';
 import { Modal } from './pk/Modal';
 import { Spinner } from './pk/Spinner';
+import { useToast } from './pk/Toast';
 import { PlaceStatusBadge } from './pk/domain';
 import { HouseLineIcon, PackageIcon, PencilSimpleIcon, PlusIcon, TrashIcon } from './pk/icons';
 import { cn } from './pk/cn';
 import { usePolling } from '@/hooks/usePolling';
+import { useInvalidFormFocus } from '@/hooks/useInvalidFormFocus';
 import { api } from '@/lib/api';
+import { validatePlaceForm } from '@/lib/place-validation.mjs';
+import { formSnapshot } from '@/lib/form-snapshot.mjs';
 import { DIST_STATUS, SHELTER_STATUS, formatNumber } from '@/lib/format';
 
 const CONFIG = {
@@ -42,6 +46,8 @@ const hhmm = (t) => (t ? String(t).slice(0, 5) : '');
 
 export default function PlaceManager({ type }) {
   const cfg = CONFIG[type];
+  const toast = useToast();
+  const focusInvalid = useInvalidFormFocus('place-form');
   const { data, error, loading, refresh } = usePolling(cfg.path);
   const [editing, setEditing] = useState(null); // null | { id?, form, position }
   const [deleting, setDeleting] = useState(null);
@@ -52,7 +58,8 @@ export default function PlaceManager({ type }) {
   const [selectedId, setSelectedId] = useState(null);
 
   function openNew() {
-    setEditing({ form: { ...cfg.empty }, position: null });
+    const form = { ...cfg.empty };
+    setEditing({ form, position: null, initial: formSnapshot(form) });
     setFormError(null);
     setFieldErrors({});
   }
@@ -61,30 +68,43 @@ export default function PlaceManager({ type }) {
     const form = Object.fromEntries(
       Object.keys(cfg.empty).map((k) => [k, k.endsWith('_time') ? hhmm(p[k]) : p[k] ?? ''])
     );
-    setEditing({ id: p.id, form, position: { lat: p.lat, lng: p.lng } });
+    const position = { lat: p.lat, lng: p.lng };
+    setEditing({ id: p.id, form, position, initial: formSnapshot(form, position) });
     setFormError(null);
     setFieldErrors({});
   }
 
-  const setField = (key) => (e) =>
+  const setField = (key) => (e) => {
     setEditing((ed) => ({ ...ed, form: { ...ed.form, [key]: e.target.value } }));
+    if (fieldErrors[key]) setFieldErrors((previous) => ({ ...previous, [key]: undefined }));
+  };
 
   async function save(e) {
     e.preventDefault();
-    const errs = {};
-    if (!editing.form.name.trim()) errs.name = 'กรุณากรอกชื่อ';
-    if (!editing.position) errs.position = 'กรุณาคลิกบนแผนที่เพื่อเลือกตำแหน่ง';
+    if (saving) return;
+    const errs = validatePlaceForm(type, editing.form, editing.position);
     setFieldErrors(errs);
-    if (Object.keys(errs).length) return;
+    if (Object.keys(errs).length) {
+      focusInvalid();
+      return;
+    }
 
     setSaving(true);
     setFormError(null);
     try {
-      const body = { ...editing.form, ...editing.position };
+      const body = {
+        ...editing.form,
+        ...editing.position,
+        ...(type === 'shelter' && {
+          capacity: Number(editing.form.capacity),
+          current_occupancy: Number(editing.form.current_occupancy),
+        }),
+      };
       await api(editing.id ? `${cfg.path}/${editing.id}` : cfg.path, {
         method: editing.id ? 'PATCH' : 'POST',
         body,
       });
+      toast(`${editing.id ? 'บันทึก' : 'เพิ่ม'}${cfg.noun} ${editing.form.name} สำเร็จ`, 4500);
       setEditing(null);
       refresh();
     } catch (err) {
@@ -95,10 +115,12 @@ export default function PlaceManager({ type }) {
   }
 
   async function remove() {
+    if (saving) return;
     setSaving(true);
     setFormError(null);
     try {
       await api(`${cfg.path}/${deleting.id}`, { method: 'DELETE' });
+      toast(`ลบ${cfg.noun} ${deleting.name} สำเร็จ`, 4500);
       setDeleting(null);
       refresh();
     } catch (err) {
@@ -115,7 +137,7 @@ export default function PlaceManager({ type }) {
     <>
       <PageHeader
         title={cfg.title}
-        desc={`${places.length} แห่ง · ข้อมูลแสดงบนแผนที่ประชาชนทันที`}
+        desc={`${data ? places.length : '—'} แห่ง · ข้อมูลแสดงบนแผนที่ประชาชนทันที`}
         actions={
           <Button onClick={openNew} size="sm" block={false} icon={<PlusIcon size={18} weight="bold" aria-hidden />}>
             เพิ่ม{cfg.noun}
@@ -138,7 +160,7 @@ export default function PlaceManager({ type }) {
 
         <div className="flex flex-col gap-3">
           {loading && <Spinner />}
-          {!loading && places.length === 0 && (
+          {!loading && !error && places.length === 0 && (
             <EmptyState icon={cfg.icon} title={`ยังไม่มี${cfg.noun}`}>
               กด “เพิ่ม{cfg.noun}” เพื่อเริ่ม
             </EmptyState>
@@ -200,27 +222,34 @@ export default function PlaceManager({ type }) {
 
       <Modal
         open={Boolean(editing)}
+        busy={saving}
+        dirty={Boolean(editing && formSnapshot(editing.form, editing.position) !== editing.initial)}
         wide
         title={editing?.id ? `แก้ไข${cfg.noun}` : `เพิ่ม${cfg.noun}`}
         onClose={() => setEditing(null)}
-        footer={
+        footer={(requestClose) => (
           <>
-            <Button variant="outline" size="sm" block={false} onClick={() => setEditing(null)}>
+            <Button variant="outline" size="sm" block={false} disabled={saving} onClick={requestClose}>
               ยกเลิก
             </Button>
             <Button type="submit" form="place-form" size="sm" block={false} loading={saving}>
               บันทึก
             </Button>
           </>
-        }
+        )}
       >
         {editing && (
           <form id="place-form" onSubmit={save} noValidate className="grid gap-4 md:grid-cols-2">
+            <fieldset disabled={saving} className="contents">
             <div className="flex flex-col gap-1.5 md:col-span-2">
               <p className="text-base font-medium">
                 ตำแหน่งบนแผนที่ <span className="text-red">*</span>
               </p>
               <div
+                inert={saving || undefined}
+                tabIndex={-1}
+                aria-label="ตำแหน่งบนแผนที่"
+                aria-invalid={fieldErrors.position ? true : undefined}
                 className={cn(
                   'h-64 overflow-hidden rounded-lg border',
                   fieldErrors.position ? 'border-red' : 'border-line2'
@@ -230,6 +259,7 @@ export default function PlaceManager({ type }) {
                   picker={{
                     value: editing.position,
                     onChange: (p) => {
+                      if (saving) return;
                       setEditing((ed) => ({ ...ed, position: { lat: p.lat, lng: p.lng } }));
                       setFieldErrors((er) => ({ ...er, position: undefined }));
                     },
@@ -257,12 +287,12 @@ export default function PlaceManager({ type }) {
 
             {type === 'shelter' ? (
               <>
-                <Field label="ความจุ (คน)">
-                  {(p) => <input {...p} type="number" min={0} className={inputClass} value={f.capacity} onChange={setField('capacity')} />}
+                <Field label="ความจุ (คน)" error={fieldErrors.capacity}>
+                  {(p) => <input {...p} type="number" min={0} max={2147483647} step={1} className={inputClass} value={f.capacity} onChange={setField('capacity')} />}
                 </Field>
-                <Field label="ผู้พักอาศัยปัจจุบัน (คน)">
+                <Field label="ผู้พักอาศัยปัจจุบัน (คน)" error={fieldErrors.current_occupancy}>
                   {(p) => (
-                    <input {...p} type="number" min={0} className={inputClass} value={f.current_occupancy} onChange={setField('current_occupancy')} />
+                    <input {...p} type="number" min={0} max={2147483647} step={1} className={inputClass} value={f.current_occupancy} onChange={setField('current_occupancy')} />
                   )}
                 </Field>
                 <Field label="สิ่งอำนวยความสะดวก" className="md:col-span-2" hint="คั่นด้วยเครื่องหมายจุลภาค">
@@ -300,6 +330,7 @@ export default function PlaceManager({ type }) {
             <div className="md:col-span-2">
               <ErrorBanner error={formError} />
             </div>
+            </fieldset>
           </form>
         )}
       </Modal>
@@ -308,6 +339,7 @@ export default function PlaceManager({ type }) {
         open={Boolean(deleting)}
         title={`ลบ${cfg.noun}`}
         confirmLabel="ลบ"
+        initialFocus="cancel"
         confirmVariant="danger"
         confirmIcon={<TrashIcon size={20} aria-hidden />}
         loading={saving}

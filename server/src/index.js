@@ -27,6 +27,7 @@ app.use('/api/distributions', require('./routes/distributions'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/applications', require('./routes/applications'));
 app.use('/api/dashboard', require('./routes/dashboard'));
+app.use('/api/announcements', require('./routes/announcements').announcementRouter());
 
 app.use((req, res) => res.status(404).json({ message: 'ไม่พบ API นี้' }));
 

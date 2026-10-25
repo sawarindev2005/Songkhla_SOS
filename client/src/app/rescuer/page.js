@@ -7,6 +7,7 @@ import { MapView } from '@/components/map';
 import { ContactActions, RequestDetail } from '@/components/Details';
 import { Button } from '@/components/pk/Button';
 import { ErrorBanner } from '@/components/pk/ErrorBanner';
+import { useToast } from '@/components/pk/Toast';
 import { UrgencyBadge } from '@/components/pk/domain';
 import {
   CaretLeftIcon, CaretRightIcon, ClipboardTextIcon, CrosshairIcon, HandTapIcon, LifebuoyIcon, XIcon,
@@ -19,6 +20,7 @@ import { distanceKm, formatDistance, timeAgo, vulnerableLabels } from '@/lib/for
 
 export default function RescuerMapPage() {
   const router = useRouter();
+  const toast = useToast();
   const mounted = useRef(false);
   const { user, updateUser } = useAuth();
   const requests = usePolling('/requests?status=active');
@@ -101,6 +103,7 @@ export default function RescuerMapPage() {
       await api(`/requests/${r.id}/accept`, { method: 'PATCH' });
       if (!mounted.current) return;
       setSelectedId(null);
+      toast(`รับเคส ${r.case_no} สำเร็จ`, 4500);
       router.push('/rescuer/missions');
     } catch (err) {
       if (!mounted.current) return;
@@ -217,8 +220,12 @@ export default function RescuerMapPage() {
               </button>
             </div>
           )}
-          <div className="mb-3">
-            <ErrorBanner error={error || requests.error} />
+          <div className="mb-3 flex flex-col gap-2">
+            <ErrorBanner error={error} />
+            <ErrorBanner
+              error={requests.error || shelters.error}
+              onRetry={() => Promise.all([requests, shelters].filter((source) => source.error).map((source) => source.refresh()))}
+            />
           </div>
 
           {mine.length > 0 && !selected && (
@@ -258,11 +265,11 @@ export default function RescuerMapPage() {
             </div>
           ) : (
             <>
-              <h2 className="mb-1 text-2xl font-bold">เคสรอความช่วยเหลือ ({pending.length})</h2>
+              <h2 className="mb-1 text-2xl font-bold">เคสรอความช่วยเหลือ ({requests.data ? pending.length : '—'})</h2>
               <p className="mb-2 text-base text-t2">
                 {myPos ? 'เรียงจากใกล้ตำแหน่งของคุณที่สุด' : 'มาร์คตำแหน่งเพื่อเรียงเคสตามระยะทาง'}
               </p>
-              {pending.length === 0 && !requests.loading && (
+              {pending.length === 0 && !requests.loading && !requests.error && (
                 <p className="py-6 text-center text-base text-t2">ไม่มีเคสที่รอความช่วยเหลือ</p>
               )}
               <ul className="divide-y divide-line">

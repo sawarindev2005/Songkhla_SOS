@@ -30,7 +30,7 @@ export function buttonClass({ variant = 'primary', size = 'md', block = true, di
   );
 }
 
-export function Button({ variant, size, icon, block, className, children, href, external, loading = false, disabled, type = 'button', ...rest }) {
+export function Button({ variant, size, icon, block, className, children, href, external, loading = false, pending = false, disabled, type = 'button', ...rest }) {
   if (typeof href === 'string') {
     const cls = buttonClass({ variant, size, block, className });
     const content = <>{icon}{children}</>;
@@ -44,9 +44,10 @@ export function Button({ variant, size, icon, block, className, children, href, 
     }
     return <Link href={href} className={cls} {...rest}>{content}</Link>;
   }
-  const off = disabled || loading;
+  // An interlocked action remains visually stable while another action is saving.
+  const off = disabled || loading || pending;
   return (
-    <button type={type} disabled={off} aria-busy={loading || undefined} className={buttonClass({ variant, size, block, disabled: off, className })} {...rest}>
+    <button type={type} disabled={off} aria-busy={loading || pending || undefined} className={buttonClass({ variant, size, block, disabled: disabled || loading, className: cn(className, pending && 'cursor-wait') })} {...rest}>
       {loading ? <CircleNotchIcon size={20} className="animate-spin" aria-hidden /> : icon}
       {children}
     </button>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
+import { applyPollingUpdate, canCommitPoll } from '@/lib/polling-data.mjs';
 
 export const POLL_MS = 15000;
 
@@ -26,9 +27,10 @@ export function usePolling(path, { interval = POLL_MS, enabled = true } = {}) {
       inFlightRef.current = controller;
       try {
         const data = await api(path, { signal: controller.signal });
+        if (!canCommitPoll(inFlightRef.current, controller)) return;
         setResult({ path, data, error: null, updatedAt: new Date() });
       } catch (err) {
-        if (err.name !== 'AbortError') {
+        if (err.name !== 'AbortError' && canCommitPoll(inFlightRef.current, controller)) {
           // โหลดซ้ำไม่สำเร็จ: เก็บข้อมูลล่าสุดของ path เดิมไว้ แล้วแจ้ง error
           setResult((prev) => (prev.path === path ? { ...prev, error: err } : { ...EMPTY, path, error: err }));
         }
@@ -41,6 +43,13 @@ export function usePolling(path, { interval = POLL_MS, enabled = true } = {}) {
 
   // เรียกเองหลังแก้ข้อมูล: ต้องได้ข้อมูลใหม่ จึงยกเลิกรอบที่ค้างอยู่แล้วโหลดใหม่
   const refresh = useCallback(() => load({ restart: true }), [load]);
+
+  // A successful write already returned the row; stop older reads overwriting it.
+  const updateData = useCallback((updater) => {
+    inFlightRef.current?.abort();
+    inFlightRef.current = null;
+    setResult((previous) => applyPollingUpdate(previous, path, updater));
+  }, [path]);
 
   useEffect(() => {
     if (!active) return;
@@ -63,5 +72,6 @@ export function usePolling(path, { interval = POLL_MS, enabled = true } = {}) {
     loading: active && !current,
     updatedAt: current ? result.updatedAt : null,
     refresh,
+    updateData,
   };
 }

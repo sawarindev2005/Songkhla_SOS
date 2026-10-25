@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from './api';
 
@@ -45,9 +45,9 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(async () => {
-    setUser(null);
     // ให้ server ลบคุกกี้ (JavaScript ลบคุกกี้ HttpOnly เองไม่ได้)
-    await api('/auth/logout', { method: 'POST', redirectOn401: false }).catch(() => {});
+    await api('/auth/logout', { method: 'POST', redirectOn401: false });
+    setUser(null);
   }, []);
 
   const updateUser = useCallback((patch) => {
@@ -63,6 +63,33 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   return useContext(AuthContext);
+}
+
+// Both staff layouts keep the session and the current page when logout fails.
+export function useLogout() {
+  const { logout } = useAuth();
+  const router = useRouter();
+  const inFlight = useRef(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function signOut() {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setPending(true);
+    setError(null);
+    try {
+      await logout();
+      router.replace('/login');
+    } catch (err) {
+      setError(new Error('ออกจากระบบไม่สำเร็จ คุณยังอยู่ในระบบ กรุณาลองใหม่', { cause: err }));
+    } finally {
+      inFlight.current = false;
+      setPending(false);
+    }
+  }
+
+  return { signOut, pending, error };
 }
 
 // กันหน้าเฉพาะ role ฝั่ง client (สิทธิ์จริงตรวจที่ server ทุก request)

@@ -12,13 +12,16 @@ import { Modal } from '@/components/pk/Modal';
 import { Segmented } from '@/components/pk/Segmented';
 import { Spinner } from '@/components/pk/Spinner';
 import { SearchField } from '@/components/pk/TextField';
+import { useToast } from '@/components/pk/Toast';
 import {
-  CheckCircleIcon, MagnifyingGlassIcon, PencilSimpleIcon, TrashIcon, UserPlusIcon, XCircleIcon,
+  CheckCircleIcon, EyeIcon, EyeSlashIcon, MagnifyingGlassIcon, PencilSimpleIcon, TrashIcon, UserPlusIcon, XCircleIcon,
 } from '@/components/pk/icons';
 import { usePolling } from '@/hooks/usePolling';
+import { useInvalidFormFocus } from '@/hooks/useInvalidFormFocus';
 import { api } from '@/lib/api';
 import { ROLE_LABEL, useAuth } from '@/lib/auth';
 import { EQUIPMENT, equipmentLabel, formatDateTime, timeAgo } from '@/lib/format';
+import { formSnapshot } from '@/lib/form-snapshot.mjs';
 
 const EMPTY = {
   username: '', full_name: '', phone: '', role: 'rescuer', team_name: '', password: '', is_active: true,
@@ -42,6 +45,8 @@ function validate(form, isNew) {
 
 export default function UsersPage() {
   const { user: me } = useAuth();
+  const toast = useToast();
+  const focusInvalid = useInvalidFormFocus('user-form');
   const { data, error, loading, refresh } = usePolling('/users', { interval: 60000 });
   const [roleFilter, setRoleFilter] = useState('all');
   const [query, setQuery] = useState('');
@@ -50,6 +55,7 @@ export default function UsersPage() {
   const [errors, setErrors] = useState({});
   const [saveError, setSaveError] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const q = query.trim().toLowerCase();
   const users = (data || []).filter(
@@ -59,30 +65,34 @@ export default function UsersPage() {
   );
 
   function open(u) {
+    setShowPassword(false);
     setErrors({});
     setSaveError(null);
-    setEditing(
-      u
-        ? {
-            id: u.id,
-            form: {
-              ...EMPTY, ...u, phone: u.phone || '', team_name: u.team_name || '', password: '', is_active: Boolean(u.is_active),
-              team_size: u.team_size ?? '', equipment: u.equipment ? u.equipment.split(',') : [], service_area: u.service_area || '',
-            },
-          }
-        : { form: { ...EMPTY } }
-    );
+    const form = u
+      ? {
+          ...EMPTY, ...u, phone: u.phone || '', team_name: u.team_name || '', password: '', is_active: Boolean(u.is_active),
+          team_size: u.team_size ?? '', equipment: u.equipment ? u.equipment.split(',') : [], service_area: u.service_area || '',
+        }
+      : { ...EMPTY };
+    setEditing({ id: u?.id, form, initial: formSnapshot(form) });
   }
 
-  const setValue = (key, value) => setEditing((ed) => ({ ...ed, form: { ...ed.form, [key]: value } }));
+  const setValue = (key, value) => {
+    setEditing((ed) => ({ ...ed, form: { ...ed.form, [key]: value } }));
+    if (errors[key]) setErrors((previous) => ({ ...previous, [key]: undefined }));
+  };
   const set = (key) => (e) => setValue(key, e.target.value);
 
   async function save(e) {
     e.preventDefault();
+    if (saving) return;
     const isNew = !editing.id;
     const errs = validate(editing.form, isNew);
     setErrors(errs);
-    if (Object.keys(errs).length) return;
+    if (Object.keys(errs).length) {
+      focusInvalid();
+      return;
+    }
 
     const { username, full_name, phone, role, team_name, password, is_active, team_size, equipment, service_area } = editing.form;
     // ข้อมูลทีมใช้เฉพาะกู้ภัย บทบาทอื่นล้างทิ้ง
@@ -98,6 +108,7 @@ export default function UsersPage() {
     try {
       await api(isNew ? '/users' : `/users/${editing.id}`, { method: isNew ? 'POST' : 'PATCH', body });
       setEditing(null);
+      toast(`${isNew ? 'สร้าง' : 'บันทึก'}บัญชี ${full_name} สำเร็จ`, 4500);
       refresh();
     } catch (err) {
       setSaveError(err);
@@ -107,10 +118,12 @@ export default function UsersPage() {
   }
 
   async function remove() {
+    if (saving) return;
     setSaving(true);
     setSaveError(null);
     try {
       await api(`/users/${deleting.id}`, { method: 'DELETE' });
+      toast(`ลบบัญชี ${deleting.full_name} สำเร็จ`, 4500);
       setDeleting(null);
       refresh();
     } catch (err) {
@@ -332,21 +345,24 @@ export default function UsersPage() {
 
       <Modal
         open={Boolean(editing)}
+        busy={saving}
+        dirty={Boolean(editing && formSnapshot(editing.form) !== editing.initial)}
         title={editing?.id ? 'แก้ไขบัญชี' : 'สร้างบัญชีใหม่'}
         onClose={() => setEditing(null)}
-        footer={
+        footer={(requestClose) => (
           <>
-            <Button variant="outline" size="sm" block={false} onClick={() => setEditing(null)}>
+            <Button variant="outline" size="sm" block={false} disabled={saving} onClick={requestClose}>
               ยกเลิก
             </Button>
             <Button type="submit" form="user-form" size="sm" block={false} loading={saving}>
               บันทึก
             </Button>
           </>
-        }
+        )}
       >
         {editing && (
           <form id="user-form" onSubmit={save} noValidate className="grid gap-4 sm:grid-cols-2">
+            <fieldset disabled={saving} className="contents">
             <Field label="ชื่อผู้ใช้ (สำหรับ login)" required={!editing.id} error={errors.username} className="sm:col-span-2">
               {(p) => (
                 <input
@@ -427,7 +443,18 @@ export default function UsersPage() {
               className="sm:col-span-2"
             >
               {(p) => (
-                <input {...p} type="text" className={inputClass} value={f.password} onChange={set('password')} autoComplete="new-password" />
+                <div className="relative">
+                  <input {...p} type={showPassword ? 'text' : 'password'} className={`${inputClass} pr-12`} value={f.password} onChange={set('password')} autoComplete="new-password" />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((value) => !value)}
+                    aria-label={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
+                    aria-pressed={showPassword}
+                    className="absolute right-1 top-1/2 grid size-10 -translate-y-1/2 cursor-pointer place-items-center rounded-lg text-t2 hover:text-ink"
+                  >
+                    {showPassword ? <EyeSlashIcon size={20} aria-hidden /> : <EyeIcon size={20} aria-hidden />}
+                  </button>
+                </div>
               )}
             </Field>
             {editing.id && !isSelf && (
@@ -442,6 +469,7 @@ export default function UsersPage() {
             <div className="sm:col-span-2">
               <ErrorBanner error={saveError} />
             </div>
+            </fieldset>
           </form>
         )}
       </Modal>
@@ -450,6 +478,7 @@ export default function UsersPage() {
         open={Boolean(deleting)}
         title="ลบบัญชี"
         confirmLabel="ลบบัญชี"
+        initialFocus="cancel"
         confirmVariant="danger"
         confirmIcon={<TrashIcon size={20} aria-hidden />}
         loading={saving}

@@ -69,15 +69,18 @@ export default function RequestPage() {
     if (!submitAttempt) return;
     const firstError = document.querySelector('[aria-invalid="true"], [data-error="true"]');
     if (!firstError) return;
-    firstError.scrollIntoView({
-      block: 'center',
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
-    });
     const target = firstError.matches('input[aria-invalid="true"]')
       ? firstError
       : firstError.matches('section[data-error="true"]')
         ? Array.from(firstError.querySelectorAll('button')).find((button) => button.textContent.trim() === 'ใช้ตำแหน่งปัจจุบัน')
         : firstError.querySelector('[role="radio"], input[type="radio"]');
+    const scrollTarget = window.getComputedStyle(firstError).display === 'contents'
+      ? target || firstError
+      : firstError;
+    scrollTarget.scrollIntoView({
+      block: 'center',
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    });
     target?.focus({ preventScroll: true });
   }, [submitAttempt]);
 
@@ -150,18 +153,18 @@ export default function RequestPage() {
   if (result) return <Success caseNo={result.case_no} />;
 
   return (
-    <form onSubmit={submit} noValidate className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 pt-5 pb-8 md:px-[max(1.5rem,calc(50%-20rem))] lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:content-start lg:gap-x-8 lg:gap-y-5 lg:px-[max(2.5rem,calc(50%-34rem))] lg:pt-8 lg:pb-8 lg:[@media(max-height:820px)]:gap-y-3 lg:[@media(max-height:820px)]:pt-4 lg:[@media(max-height:820px)]:pb-4">
-      <header className="flex flex-col gap-1 lg:col-span-2 lg:flex-row lg:items-baseline lg:gap-4">
-        <h1 className="flex items-center gap-2 text-7xl font-bold lg:shrink-0 lg:text-4xl">
+    <form onSubmit={submit} noValidate className="relative flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 pt-5 pb-8 md:grid md:grid-cols-[20rem_minmax(0,1fr)] md:grid-rows-[auto_auto_auto_minmax(0,1fr)] md:gap-0 md:overflow-hidden md:p-0 lg:grid-cols-[25.5rem_minmax(0,1fr)]">
+      <header className="flex flex-col gap-1 md:col-start-1 md:row-start-1 md:px-4 md:pt-5 md:pb-4">
+        <h1 className="flex items-center gap-2 text-7xl font-bold md:text-4xl">
           <SirenIcon size={28} weight="fill" className="text-red" aria-hidden />
-          ขอความช่วยเหลือ
+          แจ้งขอความช่วยเหลือ
         </h1>
-        <p className="font-body text-md text-t2">กรอกให้ครบเท่าที่ทำได้ ทีมกู้ภัยใช้ข้อมูลนี้จัดลำดับความด่วน</p>
+        <p className="font-body text-md text-t2">แจ้งให้ตัวเองหรือผู้ประสบภัยคนอื่น กรอกให้ครบเท่าที่ทำได้ ทีมกู้ภัยใช้ข้อมูลนี้จัดลำดับความด่วน</p>
       </header>
 
       {/* ตำแหน่ง */}
-      <section className="flex flex-col gap-2 lg:col-start-1 lg:row-start-2 lg:flex lg:h-full lg:min-h-0 lg:min-w-0 lg:flex-col" data-error={errors.position ? 'true' : undefined}>
-        <div className="flex items-end justify-between gap-2">
+      <section className="flex flex-col gap-2 md:contents" data-error={errors.position ? 'true' : undefined}>
+        <div className="flex items-end justify-between gap-2 md:col-start-1 md:row-start-2 md:px-4 md:pb-2">
           <h2 className="min-w-0 flex-1 text-base font-medium">
             ตำแหน่งที่ต้องการความช่วยเหลือ <span className="text-red">*</span>
           </h2>
@@ -179,14 +182,14 @@ export default function RequestPage() {
         </div>
         <div
           className={cn(
-            'isolate h-56 shrink-0 overflow-hidden rounded-lg border short:h-44 lg:relative lg:h-auto lg:min-h-80 lg:flex-1 lg:shrink lg:rounded-xl lg:short:h-auto',
+            'isolate h-56 shrink-0 overflow-hidden rounded-lg border short:h-44 md:col-start-2 md:row-span-4 md:row-start-1 md:h-full md:min-h-0 md:w-full md:rounded-none md:border-0 md:border-l md:short:h-full',
             errors.position ? 'border-red' : 'border-line2'
           )}
         >
           <MapView picker={{ value: position, onChange: pick }} focus={focus} locate={false} />
         </div>
         <p
-          className={cn('font-body text-sm', errors.position ? 'text-red-tx' : 'text-t3')}
+          className={cn('font-body text-sm md:col-start-1 md:row-start-3 md:border-b md:border-line md:px-4 md:pb-4', errors.position ? 'text-red-tx' : 'text-t3')}
           role={errors.position ? 'alert' : undefined}
         >
           {errors.position ||
@@ -196,9 +199,9 @@ export default function RequestPage() {
         </p>
       </section>
 
-      {/* จอกว้าง: คอลัมน์ขวาสูงตามเนื้อหา แผนที่ซ้ายยืดเท่าคอลัมน์นี้ ไม่ยืดตามความสูงจอ (ยืดแล้วช่องกรอกใหญ่ผิดสัดส่วน) */}
-      <div className="contents lg:col-start-2 lg:row-start-2 lg:flex lg:min-w-0 lg:flex-col lg:gap-4">
-        <fieldset className="flex flex-col gap-2 lg:[&_[role=radiogroup]]:grid lg:[&_[role=radiogroup]]:grid-cols-2 lg:[&_[role=radio]]:min-h-11 lg:[&_[role=radio]]:py-2 lg:[&_[role=radio]_.font-body]:hidden lg:[@media(min-height:960px)]:[&_[role=radio]_.font-body]:block" data-error={errors.urgency ? 'true' : undefined}>
+      {/* คอม: ฟอร์มเลื่อนในแผงซ้าย แผนที่ขวาเต็มสูง; มือถือคงฟอร์มและแผนที่เรียงตามเดิม */}
+      <div className="contents md:col-start-1 md:row-start-4 md:flex md:min-h-0 md:min-w-0 md:flex-col md:gap-4 md:overflow-y-auto md:overscroll-contain md:px-4 md:pt-4 md:pb-8">
+        <fieldset className="flex flex-col gap-2" data-error={errors.urgency ? 'true' : undefined}>
           <legend className="mb-2 text-base font-medium">
             ความเร่งด่วน <span className="text-red">*</span>
           </legend>
@@ -229,7 +232,7 @@ export default function RequestPage() {
 
         <div className="contents lg:grid lg:min-w-0 lg:grid-cols-2 lg:items-start lg:gap-4 lg:[&>*]:min-w-0">
           <TextField
-            label="ชื่อผู้ติดต่อ *"
+            label={<>ชื่อผู้ติดต่อ <span className="text-red">*</span></>}
             error={errors.requester_name}
             value={form.requester_name}
             onChange={set('requester_name')}
@@ -237,7 +240,7 @@ export default function RequestPage() {
           />
 
           <TextField
-            label="เบอร์โทรศัพท์ *"
+            label={<>เบอร์โทรศัพท์ <span className="text-red">*</span></>}
             error={errors.phone}
             hint="ทีมกู้ภัยจะโทรกลับเบอร์นี้ (ไม่แสดงต่อสาธารณะ)"
             type="tel"
@@ -249,7 +252,7 @@ export default function RequestPage() {
             onChange={set('phone')}
           />
 
-          <div className="flex flex-col gap-2 lg:col-span-2 lg:min-w-0 lg:flex-row lg:items-center lg:justify-between lg:[&_[role=group]]:min-w-0 lg:[&_[role=group]]:gap-2">
+          <div className="flex min-w-0 flex-col gap-2 lg:col-span-2">
             <span className="text-base font-medium">จำนวนคนที่ต้องการความช่วยเหลือ</span>
             <Stepper
               label="จำนวนคน"

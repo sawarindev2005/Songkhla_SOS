@@ -17,7 +17,7 @@
 
 | Method | Path | สิทธิ์ | ทำอะไร |
 |---|---|---|---|
-| POST | `/auth/login` | สาธารณะ | body `{ username, password }` → ตั้งคุกกี้ `hy_token` (HttpOnly) และตอบ `{ user }` (ตรวจรหัสด้วย bcrypt, บัญชีที่ `is_active = 0` ได้ 403) |
+| POST | `/auth/login` | สาธารณะ | body `{ username, password }` → ตั้งคุกกี้ `hy_token` (HttpOnly) และตอบ `{ user }` (ตรวจรหัสด้วย bcrypt, บัญชีที่ `is_active = 0` ได้ 403) — ถ้ายังไม่มีบัญชีแต่มีใบสมัครกู้ภัยที่รหัสผ่านตรง ได้ 403 พร้อมข้อความ "รออนุมัติ" หรือ "ไม่ผ่านการอนุมัติ: <เหตุผล>" |
 | POST | `/auth/logout` | สาธารณะ | ลบคุกกี้ `hy_token` → 204 |
 | GET | `/auth/me` | 🔒 ทุกบทบาท | ข้อมูลบัญชีของ token ปัจจุบัน (client เรียกตอนเปิดเว็บเพื่อเช็กว่ายังล็อกอินอยู่) |
 
@@ -60,9 +60,23 @@
 | PATCH | `/users/me/location` | 🔒 rescuer | body `{ lat, lng }` อัปเดตตำแหน่งตัวเอง |
 | GET | `/users/rescuers` | 🔒 command, admin | รายชื่อกู้ภัยพร้อมตำแหน่งและจำนวนงานที่กำลังทำ |
 | GET | `/users?role=` | 🔒 admin | บัญชีทั้งหมด |
-| POST | `/users` | 🔒 admin | สร้างบัญชี body `username, password (≥8), full_name, phone, role, team_name` |
+| POST | `/users` | 🔒 admin | สร้างบัญชี body `username, password (≥8), full_name, phone, role, team_name` และสำหรับกู้ภัย `team_size, equipment, service_area` |
 | PATCH | `/users/:id` | 🔒 admin | แก้ข้อมูล/บทบาท/ระงับ (`is_active`)/รหัสผ่าน — ระงับหรือลดสิทธิ์ตัวเองไม่ได้ |
 | DELETE | `/users/:id` | 🔒 admin | ลบบัญชี เคสที่ค้างอยู่กลับเข้าคิว `pending` — ลบตัวเองไม่ได้ |
+
+### สมัครอาสากู้ภัย — `server/src/routes/applications.js`
+
+อาสาสมัครส่งใบสมัครเอง ยังเข้าสู่ระบบไม่ได้จนกว่าศูนย์บัญชาการหรือ admin อนุมัติ (อนุมัติแล้วจึงสร้างแถวใน `users` บทบาท `rescuer`)
+
+| Method | Path | สิทธิ์ | ทำอะไร |
+|---|---|---|---|
+| POST | `/applications` | สาธารณะ | body `username, password (≥8), full_name, phone (9–10 หลัก), team_name, team_size (1–999), equipment (array จาก boat/truck/pickup/first_aid), service_area` → `201 { id }` — ชื่อผู้ใช้ซ้ำกับบัญชีหรือใบสมัครที่รออยู่ หรือเบอร์มีใบสมัครรออยู่แล้ว ได้ 409 |
+| GET | `/applications?status=` | 🔒 command, admin | รายการใบสมัคร `status` = `pending` (ค่าเริ่มต้น) / `approved` / `rejected` |
+| GET | `/applications/pending-count` | 🔒 command, admin | `{ count }` จำนวนที่รออนุมัติ (ตัวเลขบนเมนู) |
+| PATCH | `/applications/:id/approve` | 🔒 command, admin | สร้างบัญชีกู้ภัยจากใบสมัคร (ใช้รหัสผ่านที่ผู้สมัครตั้งไว้) — พิจารณาไปแล้วได้ 409 |
+| PATCH | `/applications/:id/reject` | 🔒 command, admin | body `{ reason }` (บังคับ) ผู้สมัครเห็นเหตุผลตอนพยายาม login |
+
+ฐานข้อมูลเดิม: รัน `server/sql/migrate-rescuer-applications.sql` ครั้งเดียวก่อนใช้งาน
 
 ## 5. แดชบอร์ด — `server/src/routes/dashboard.js`
 

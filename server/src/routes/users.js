@@ -2,11 +2,13 @@ const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
-const { httpError, requireLatLng, pick } = require('../utils');
+const {
+  httpError, requireLatLng, pick, normalizeUsername, checkPassword, normalizeEquipment, normalizeTeamSize,
+} = require('../utils');
 
 const ROLES = ['rescuer', 'command', 'admin'];
-const SAFE_FIELDS = `id, username, full_name, phone, role, team_name, current_lat, current_lng,
-  location_updated_at, is_active, created_at`;
+const SAFE_FIELDS = `id, username, full_name, phone, role, team_name, team_size, equipment, service_area,
+  current_lat, current_lng, location_updated_at, is_active, created_at`;
 
 // จำนวนเคสที่กำลังทำอยู่ของกู้ภัยแต่ละคน
 const ACTIVE_MISSIONS = `(SELECT COUNT(*) FROM help_requests r
@@ -55,10 +57,10 @@ async function findById(id) {
   return rows[0];
 }
 
-function checkPassword(password) {
-  if (typeof password !== 'string' || password.length < 8) {
-    throw httpError(400, 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร');
-  }
+// ข้อมูลทีมกู้ภัย: ตรวจ/แปลงเฉพาะฟิลด์ที่ส่งมา
+function normalizeRescuerFields(data) {
+  if (data.team_size !== undefined) data.team_size = normalizeTeamSize(data.team_size);
+  if (data.equipment !== undefined) data.equipment = normalizeEquipment(data.equipment);
 }
 
 router.get('/', async (req, res) => {
@@ -73,13 +75,11 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   const b = req.body || {};
-  const data = pick(b, ['username', 'full_name', 'phone', 'role', 'team_name']);
-  data.username = String(data.username || '').trim().toLowerCase();
+  const data = pick(b, ['username', 'full_name', 'phone', 'role', 'team_name', 'team_size', 'equipment', 'service_area']);
+  data.username = normalizeUsername(data.username);
   data.full_name = String(data.full_name || '').trim();
-  if (!/^[a-z0-9_.-]{3,50}$/.test(data.username)) {
-    throw httpError(400, 'ชื่อผู้ใช้ต้องเป็นภาษาอังกฤษ ตัวเลข หรือ _ . - ความยาว 3–50 ตัว');
-  }
   if (!data.full_name) throw httpError(400, 'กรุณากรอกชื่อ-นามสกุล');
+  normalizeRescuerFields(data);
   if (!ROLES.includes(data.role)) throw httpError(400, 'กรุณาเลือกบทบาท');
   checkPassword(b.password);
   data.password_hash = await bcrypt.hash(b.password, 10);
@@ -92,7 +92,8 @@ router.patch('/:id', async (req, res) => {
   const id = Number(req.params.id);
   await findById(id);
   const b = req.body || {};
-  const data = pick(b, ['full_name', 'phone', 'role', 'team_name', 'is_active']);
+  const data = pick(b, ['full_name', 'phone', 'role', 'team_name', 'team_size', 'equipment', 'service_area', 'is_active']);
+  normalizeRescuerFields(data);
 
   if (data.role !== undefined && !ROLES.includes(data.role)) throw httpError(400, 'บทบาทไม่ถูกต้อง');
   if (data.is_active !== undefined) data.is_active = data.is_active ? 1 : 0;

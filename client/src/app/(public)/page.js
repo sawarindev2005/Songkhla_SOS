@@ -59,6 +59,7 @@ export default function HomePage() {
   const toast = useToast();
   const shelters = usePolling('/shelters');
   const distributions = usePolling('/distributions');
+  const authored = usePolling('/announcements/public');
   const rescuers = usePolling('/users/rescuers/public');
   const stats = usePolling('/dashboard/public');
   // เคสที่ยังไม่จบของทุกคน (API สาธารณะ ไม่มีเบอร์โทร) แสดงเป็นรายการในแผ่นตอนลากขึ้น
@@ -156,6 +157,7 @@ export default function HomePage() {
   const retryFailed = () => layers.forEach(([l]) => l.error && l.refresh());
 
   const announcements = buildAnnouncements({
+    announcements: authored.data || [],
     shelters: data.shelters,
     distributions: data.distributions,
     now: distributions.updatedAt?.getTime() ?? 0, // ใช้หาจุดแจกที่ใกล้ปิด
@@ -225,7 +227,7 @@ export default function HomePage() {
         <NewsTicker
           items={announcements}
           updatedAt={shelters.updatedAt}
-          loading={shelters.loading || distributions.loading}
+          loading={shelters.loading || distributions.loading || authored.loading}
           className="px-3 md:w-full md:max-w-lg md:px-0"
         />
         {/* ดูรายละเอียดบนมือถือ: เว้นแถบแผนที่ให้เห็นหมุดใต้ข่าวสาร; กลับจากรายละเอียดแล้วแสดงตัวกรองตามเดิม */}

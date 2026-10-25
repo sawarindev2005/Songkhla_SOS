@@ -116,6 +116,7 @@ export function MapSheet({
   return (
     <div
       ref={ref}
+      data-form-sheet
       className={cn(
         'pointer-events-none absolute inset-x-0 bottom-0 z-[500] flex flex-col',
         full ? 'max-h-[calc(100%-112px)]' : 'max-h-[50%]',
@@ -130,6 +131,7 @@ export function MapSheet({
           ลดกลับครึ่งจอ → แสดงอีกครั้ง; จอกว้างยังวางปุ่มลอยข้างแผงตามเดิม */}
       {toolbar && (
         <div
+          data-form-sheet-toolbar
           className={cn(
             'flex items-center justify-between px-3 pb-3 transition-[opacity,visibility] duration-200 motion-reduce:transition-none',
             // จอกว้าง: ย้ายไปลอยมุมขวาล่างของแผนที่ (การ์ดเคส + ปุ่มตำแหน่ง/โทร) แบบปุ่มควบคุมของ Google Maps
@@ -153,6 +155,7 @@ export function MapSheet({
       >
         {/* หัวแผ่น (ที่จับ + header) อยู่กับที่ เลื่อนเฉพาะเนื้อหาด้านล่าง มีเส้นคั่นเมื่อเนื้อหาเลื่อนลอดหัว */}
         <div
+          data-form-sheet-header
           onPointerDown={handlePointerDown}
           className={cn(
             'relative z-10 flex shrink-0 touch-none flex-col gap-3.5 rounded-t-3xl border-b bg-white px-4 pt-2 pb-3 select-none short:pb-2 short:gap-2.5',

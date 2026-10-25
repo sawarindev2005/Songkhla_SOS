@@ -9,6 +9,7 @@ import { ConfirmDialog } from '@/components/pk/ConfirmDialog';
 import { ErrorBanner } from '@/components/pk/ErrorBanner';
 import { Segmented } from '@/components/pk/Segmented';
 import { Spinner } from '@/components/pk/Spinner';
+import { useToast } from '@/components/pk/Toast';
 import { UrgencyBadge } from '@/components/pk/domain';
 import {
   ArrowCounterClockwiseIcon, CheckCircleIcon, CursorClickIcon, LifebuoyIcon, XCircleIcon,
@@ -27,6 +28,7 @@ const FILTERS = [
 const rescuerPos = (r) => (r.current_lat != null ? { lat: r.current_lat, lng: r.current_lng } : null);
 
 export default function AssignPage() {
+  const toast = useToast();
   const requests = usePolling('/requests?status=active');
   const rescuers = usePolling('/users/rescuers');
   const [filter, setFilter] = useState('pending');
@@ -52,11 +54,12 @@ export default function AssignPage() {
     setError(null);
   }
 
-  async function run(key, fn) {
+  async function run(key, fn, successMessage) {
     setBusy(key);
     setError(null);
     try {
       await fn();
+      toast(successMessage, 4500);
       await Promise.all([requests.refresh(), rescuers.refresh()]);
     } catch (err) {
       setError(err);
@@ -68,15 +71,30 @@ export default function AssignPage() {
 
   const assign = (rescuer) =>
     run(`assign-${rescuer.id}`, () =>
-      api(`/requests/${selected.id}/assign`, { method: 'PATCH', body: { rescuer_id: rescuer.id } })
+      api(`/requests/${selected.id}/assign`, { method: 'PATCH', body: { rescuer_id: rescuer.id } }),
+      `มอบหมายเคส ${selected.case_no} ให้ ${rescuer.team_name || rescuer.full_name} สำเร็จ`
     );
 
   const setStatus = (status) =>
-    run(`status-${status}`, () => api(`/requests/${selected.id}/status`, { method: 'PATCH', body: { status } }));
+    run(
+      `status-${status}`,
+      () => api(`/requests/${selected.id}/status`, { method: 'PATCH', body: { status } }),
+      `บันทึกสถานะเคส ${selected.case_no} เป็น “${STATUS[status].label}” แล้ว`
+    );
+
+  function retryData() {
+    return Promise.all([requests, rescuers].filter((source) => source.error).map((source) => source.refresh()));
+  }
 
   return (
     <>
       <PageHeader title="มอบหมายเคส" desc="เลือกเคสจากรายการหรือแผนที่ แล้วเลือกหน่วยกู้ภัยที่ใกล้ที่สุด" />
+      {(error || requests.error || rescuers.error) && (
+        <div className="mb-4 flex flex-col gap-3">
+          <ErrorBanner error={error} />
+          <ErrorBanner error={requests.error || rescuers.error} onRetry={retryData} />
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[26rem_1fr]">
         {/* รายการเคส */}
@@ -88,13 +106,13 @@ export default function AssignPage() {
               onChange={setFilter}
               options={FILTERS.map((f) => ({
                 value: f.key,
-                label: `${f.label} (${all.filter((r) => r.status === f.key).length})`,
+                label: `${f.label} (${requests.data ? all.filter((r) => r.status === f.key).length : '—'})`,
               }))}
             />
           </div>
           {requests.loading && <Spinner />}
           <ul className="max-h-[40dvh] min-h-0 flex-1 divide-y divide-line overflow-y-auto lg:max-h-none">
-            {!requests.loading && list.length === 0 && (
+            {!requests.loading && !requests.error && list.length === 0 && (
               <li className="p-6 text-center text-base text-t2">ไม่มีเคสในสถานะนี้</li>
             )}
             {list.map((r) => (
@@ -138,8 +156,6 @@ export default function AssignPage() {
               locate={false}
             />
           </div>
-
-          <ErrorBanner error={error || requests.error || rescuers.error} />
 
           {!selected ? (
             <div className="flex items-center gap-3 rounded-xl border border-dashed border-line2 p-6 text-t2">
@@ -198,7 +214,7 @@ export default function AssignPage() {
                   </p>
                 )}
                 <ul className="flex max-h-[24rem] flex-col divide-y divide-line overflow-y-auto lg:min-h-0 lg:max-h-none lg:flex-1">
-                  {rankedRescuers.length === 0 && (
+                  {!rescuers.loading && !rescuers.error && rankedRescuers.length === 0 && (
                     <li className="py-4 text-center text-base text-t2">ยังไม่มีหน่วยกู้ภัยในระบบ</li>
                   )}
                   {rankedRescuers.map((r) => {

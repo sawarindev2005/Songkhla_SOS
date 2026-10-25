@@ -167,3 +167,12 @@
 - token อยู่ในคุกกี้ HttpOnly JavaScript อ่านไม่ได้ แต่ XSS ยังสั่ง request ในนามผู้ใช้ได้ระหว่างที่เปิดหน้าอยู่ — HttpOnly กันการ "ขโมย token ไปใช้ที่อื่น" ไม่ได้กัน XSS ทั้งหมด
 - ถ้าเปลี่ยน `JWT_EXPIRES_IN` ควรแก้ `COOKIE_MAX_AGE` ใน `server/src/middleware/auth.js` ให้ตรงกันด้วย
 - ถ้าเปลี่ยน `JWT_SECRET` ทุกคนต้อง login ใหม่ (token เก่าใช้ไม่ได้ทั้งหมด)
+# Admin-authored public announcements
+
+- `GET /announcements/public`: public, published entries only, newest publication first (maximum 50), `Cache-Control: no-store`.
+- `GET /announcements`: admin only, including hidden entries. Other roles receive 403; missing/expired authentication receives 401.
+- `POST /announcements`: admin only. Required `title` (1–160 characters) and `content` (1–5000 characters), plain text. Optional `tone`: `info` (default), `org`, or `red`. Optional boolean `is_published` defaults to `false`. Author comes from the authenticated admin, not the submitted body.
+- `PATCH /announcements/:id`: admin only; validates supplied fields. `is_published: true` publishes a hidden entry with a new publication time; `false` hides it from the public feed.
+- `DELETE /announcements/:id`: admin only; permanently deletes the announcement. The admin UI confirms first and offers hiding as the reversible alternative.
+- Responses include announcement content, state/timestamps, and `author_name` via a LEFT JOIN to users; deleted author accounts do not delete announcements. No password or session fields are returned.
+- Existing databases require the separately approved `server/sql/migrate-announcements.sql`. Do not apply the destructive fresh-install `schema.sql` to existing data.

@@ -1,4 +1,4 @@
-// ประกาศจากศูนย์บัญชาการ สร้างอัตโนมัติจากข้อมูลจริงในระบบ (สถิติ / ที่พักพิง / จุดแจกจ่าย) ไม่ต้องมี API ข่าวสารแยก
+// Automatic place updates are combined with admin-authored announcements from the API.
 // ข่าวจากกรมอุตุฯ ยังไม่ได้ใส่: API data.tmd.go.th เรียกจากเบราว์เซอร์ไม่ได้ (CORS อนุญาตเฉพาะ wxmap.tmd.go.th)
 // ถ้าจะเพิ่ม ต้องให้ฝั่ง server ดึงมาให้ แล้วต่อท้ายรายการที่ buildAnnouncements คืน
 //
@@ -11,6 +11,7 @@
 
 import { isNearFull, openHours, shelterFree } from '@/components/pk/domain';
 import { formatNumber } from '@/lib/format';
+import { publishedAnnouncements } from './published-announcements.mjs';
 
 const TONE_ORDER = { red: 0, org: 1, ok: 2 };
 // จุดแจกที่จะปิดภายในเวลานี้ = ข่าว "ใกล้ปิด"
@@ -31,7 +32,7 @@ function closeAt(d, now) {
 }
 
 /** now = เวลาของรอบดึงข้อมูลล่าสุด (ms) ใช้หาจุดแจกที่ใกล้ปิด — 0 = ยังไม่รู้เวลา ข้ามข่าวใกล้ปิด */
-export function buildAnnouncements({ shelters = [], distributions = [], now = 0 }) {
+export function buildAnnouncements({ shelters = [], distributions = [], announcements = [], now = 0 }) {
   const out = [];
 
   const open = shelters.filter((s) => s.status === 'open' && shelterFree(s) > 0);
@@ -123,5 +124,5 @@ export function buildAnnouncements({ shelters = [], distributions = [], now = 0 
   }
 
   // ข่าวร้ายขึ้นก่อน ตามด้วยเตือนภัย แล้วข่าวดี
-  return out.sort((a, b) => TONE_ORDER[a.tone] - TONE_ORDER[b.tone]);
+  return [...publishedAnnouncements(announcements), ...out.sort((a, b) => TONE_ORDER[a.tone] - TONE_ORDER[b.tone])];
 }

@@ -23,6 +23,7 @@ const ENTER = {
 // แดง = ข่าวร้าย  ส้ม = เตือนภัย  เขียว = ข่าวดี
 // icon = สีโทรโข่ง  pulse = วงสีที่กะพริบรอบโทรโข่ง  note = กล่องคำแนะนำในหน้ารายละเอียด
 const TONE = {
+  info: { icon: 'text-acc', pulse: 'bg-acc', text: 'text-acc-tx', note: 'bg-acc-bg text-acc-tx' },
   red: { icon: 'text-red', pulse: 'bg-red', text: 'text-red-tx', note: 'bg-red-bg text-red-tx' },
   org: { icon: 'text-org', pulse: 'bg-org', text: 'text-org-tx', note: 'bg-org-bg text-org-tx' },
   ok: { icon: 'text-ok', pulse: 'bg-ok', text: 'text-ok', note: 'bg-ok-bg text-ok' },
@@ -194,16 +195,20 @@ function NewsDetail({ open, item, position, updatedAt, onPrev, onNext, onClose }
           <div className="flex items-center gap-2">
             <MegaphoneIcon size={18} weight="fill" className={tone.icon} aria-hidden />
             <p className="flex-1 font-body text-sm text-t3">
-              ประกาศจากศูนย์บัญชาการ{updatedAt && ` · ดึงข้อมูล ${formatTime(updatedAt)}`}
+              {item.kind === 'announcement' ? 'ประกาศจากผู้ดูแลระบบ' : 'ข้อมูลจากศูนย์บัญชาการ'}{updatedAt && ` · ดึงข้อมูล ${formatTime(updatedAt)}`}
             </p>
             <button type="button" aria-label="ปิด" onClick={onClose} className={navBtn}>
               <XIcon size={18} weight="bold" aria-hidden />
             </button>
           </div>
 
-          <h2 id="news-detail-title" className={cn('text-5xl leading-snug font-bold', tone.text)}>
+          <h2 id="news-detail-title" className={cn('break-words text-5xl leading-snug font-bold', tone.text)}>
             {item.text}
           </h2>
+          {item.content && <p className="whitespace-pre-wrap break-words font-body text-md leading-relaxed">{item.content}</p>}
+          {item.kind === 'announcement' && (
+            <p className="font-body text-xs text-t3">เผยแพร่โดย {item.author}{item.publishedAt && ` · ${timeAgo(item.publishedAt)}`}</p>
+          )}
 
           {item.detail?.lines?.length > 0 && (
             <ul className="flex flex-col border-y border-line">

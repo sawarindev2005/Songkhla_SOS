@@ -29,7 +29,7 @@ export default function CommandDashboard() {
         desc={`สรุปสถานการณ์ อ.หาดใหญ่ · อัปเดต ${formatTime(updatedAt)}`}
         actions={
           <Button href="/command/assign" size="sm" block={false} icon={<PathIcon size={18} weight="bold" aria-hidden />}>
-            มอบหมายเคส ({s?.pending ?? 0} รอ)
+            มอบหมายเคส ({s?.pending ?? '—'} รอ)
           </Button>
         }
       />

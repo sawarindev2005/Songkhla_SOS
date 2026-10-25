@@ -42,6 +42,7 @@ export default function MissionsPage() {
     try {
       await api(`/requests/${r.id}/status`, { method: 'PATCH', body: { status: next } });
       await refresh();
+      if (next === 'in_progress') setMessage(`บันทึกแล้ว: เริ่มเข้าช่วยเหลือเคส ${r.case_no}`);
       if (next === 'rescued') setMessage(`บันทึกแล้ว: เคส ${r.case_no} ช่วยเหลือสำเร็จ`);
       if (next === 'pending') setMessage(`คืนเคส ${r.case_no} เข้าคิวแล้ว`);
     } catch (err) {
@@ -64,12 +65,13 @@ export default function MissionsPage() {
         value={tab}
         onChange={setTab}
         options={[
-          { value: 'active', label: `กำลังดำเนินการ (${activeCount})` },
+          { value: 'active', label: `กำลังดำเนินการ (${data ? activeCount : '—'})` },
           { value: 'done', label: 'เสร็จสิ้น' },
         ]}
       />
 
-      <ErrorBanner error={actionError || error} onRetry={error ? refresh : undefined} />
+      <ErrorBanner error={actionError} />
+      <ErrorBanner error={error} onRetry={refresh} />
       {message && (
         <div role="status" className="flex items-center gap-2 rounded-lg border border-ok-line bg-ok-bg p-3 text-base text-ok">
           <p className="flex-1">{message}</p>
@@ -79,7 +81,7 @@ export default function MissionsPage() {
         </div>
       )}
       {loading && <Spinner />}
-      {!loading && list.length === 0 && (
+      {!loading && !error && list.length === 0 && (
         <EmptyState icon={ClipboardTextIcon} title={tab === 'active' ? 'ยังไม่มีภารกิจ' : 'ยังไม่มีเคสที่เสร็จสิ้น'}>
           {tab === 'active' && 'ไปที่แผนที่เคสเพื่อรับเคสใกล้ตัว หรือรอศูนย์บัญชาการมอบหมาย'}
         </EmptyState>

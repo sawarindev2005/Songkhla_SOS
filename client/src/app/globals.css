@@ -19,9 +19,59 @@ a,
   touch-action: manipulation;
 }
 
-:focus-visible {
-  outline: 3px solid var(--color-acc);
-  outline-offset: 2px;
+@layer base {
+  :focus-visible {
+    outline: 3px solid var(--color-acc);
+    outline-offset: 2px;
+  }
+}
+
+/* Component focus utilities override the fallback above; wrapped inputs have one outline. */
+.form-viewport {
+  height: var(--form-layout-height, 100dvh);
+}
+
+:root[data-form-occluded] [data-public-shell] {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+:root[data-form-occluded] [data-form-main] {
+  max-height: var(--form-content-height);
+}
+
+.form-modal-content {
+  max-height: min(90dvh, calc(var(--form-viewport-height, 100dvh) - 24px));
+}
+
+:root[data-form-occluded] .form-modal {
+  top: calc(var(--form-viewport-top, 0px) + 12px);
+  bottom: auto;
+  margin-block: 0;
+}
+
+/* A search sheet still needs a usable body above a keyboard on short phones. */
+@media (max-width: 767px) {
+  :root[data-form-short] [data-form-sheet]:has(input[type='search']) {
+    max-height: 100%;
+    transition: none;
+  }
+  :root[data-form-short] [data-form-sheet]:has(input[type='search']) [data-form-sheet-toolbar] {
+    display: none;
+  }
+  :root[data-form-short] [data-form-sheet]:has(input[type='search']) [data-form-sheet-header] {
+    gap: 0;
+    padding-block: 0;
+  }
+  :root[data-form-short] [data-form-sheet]:has(input[type='search']) [data-form-sheet-header] > button {
+    height: 24px;
+    margin-block: 0;
+    padding-block: 0;
+  }
+  :root[data-form-short] [data-form-sheet]:has(input[type='search']) [data-form-sheet-header] p {
+    display: none;
+  }
 }
 
 .pb-safe {

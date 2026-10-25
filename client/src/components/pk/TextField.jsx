@@ -10,7 +10,7 @@ export function TextField({ label, prefix, hint, error, className, id, multiline
   return (
     <div className={className}>
       <label htmlFor={fid} className="mb-2 block text-base font-medium">{label}</label>
-      <div className={cn(
+      <div data-form-control className={cn(
         'flex items-center gap-3 rounded-lg border bg-white px-3.5',
         multiline ? 'py-3' : 'h-13',
         'focus-within:outline-2 focus-within:-outline-offset-1 focus-within:outline-acc',
@@ -32,7 +32,7 @@ export function TextField({ label, prefix, hint, error, className, id, multiline
 
 export function SearchField({ label, value, onChange, placeholder, icon }) {
   return (
-    <label className="flex h-11 w-full items-center gap-2 rounded-md border border-line bg-s1 px-3 focus-within:outline-2 focus-within:outline-acc">
+    <label data-form-control className="flex h-11 w-full items-center gap-2 rounded-md border border-line bg-s1 px-3 focus-within:outline-2 focus-within:outline-acc">
       {icon}
       <input type="search" aria-label={label} value={value} placeholder={placeholder}
         onChange={e => onChange(e.target.value)}

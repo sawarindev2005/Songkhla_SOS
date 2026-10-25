@@ -15,13 +15,17 @@ export function ConfirmDialog({
   loading = false,
   onConfirm,
   onCancel,
+  initialFocus = 'confirm',
 }) {
   const ref = useRef(null);
 
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
+    if (open && !dialog.open) {
+      dialog.showModal();
+      dialog.querySelector('[data-initial-focus="true"]')?.focus();
+    }
     if (!open && dialog.open) dialog.close();
   }, [open]);
 
@@ -31,7 +35,7 @@ export function ConfirmDialog({
       aria-labelledby="confirm-dialog-title"
       onCancel={(e) => {
         e.preventDefault();
-        onCancel();
+        if (!loading) onCancel();
       }}
       className="m-auto w-[calc(100%-2rem)] max-w-md rounded-xl bg-white p-0 text-ink shadow-float backdrop:bg-black/50"
     >
@@ -42,10 +46,10 @@ export function ConfirmDialog({
           </h2>
           <div className="font-body text-md text-t2">{children}</div>
           <div className="flex flex-col gap-2">
-            <Button variant={confirmVariant} icon={confirmIcon} loading={loading} onClick={onConfirm} autoFocus>
+            <Button variant={confirmVariant} icon={confirmIcon} loading={loading} onClick={onConfirm} data-initial-focus={initialFocus === 'confirm'}>
               {confirmLabel}
             </Button>
-            <Button variant="outline" onClick={onCancel}>
+            <Button variant="outline" onClick={onCancel} disabled={loading} data-initial-focus={initialFocus === 'cancel'}>
               {cancelLabel}
             </Button>
           </div>

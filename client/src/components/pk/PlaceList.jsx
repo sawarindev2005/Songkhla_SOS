@@ -6,7 +6,8 @@ import { usePolling } from '@/hooks/usePolling';
 import { useVisibleMyCases } from '@/hooks/useVisibleMyCases';
 import { buildAnnouncements } from '@/lib/announcements';
 import { distanceKm, formatDistance, formatNumber } from '@/lib/format';
-import { CaretLeftIcon, CircleNotchIcon, CrosshairIcon, HouseLineIcon, MagnifyingGlassIcon, PackageIcon, WarningIcon } from './icons';
+import { CaretLeftIcon, CircleNotchIcon, CrosshairIcon, HouseLineIcon, MagnifyingGlassIcon, PackageIcon } from './icons';
+import { ErrorBanner } from './ErrorBanner';
 import { PlaceRow } from './CaseCard';
 import { EmptyState } from './EmptyState';
 import { IconButton } from './IconButton';
@@ -60,7 +61,9 @@ export function PlaceList({ type }) {
 
   // แถบข่าวสารชุดเดียวกับหน้าภาพรวม: ดึงเพิ่มเฉพาะข้อมูลอีกหมวดที่หน้านี้ยังไม่มี
   const other = usePolling(type === 'shelter' ? '/distributions' : '/shelters');
+  const authored = usePolling('/announcements/public');
   const announcements = buildAnnouncements({
+    announcements: authored.data || [],
     shelters: (type === 'shelter' ? data : other.data) || [],
     distributions: (type === 'distribution' ? data : other.data) || [],
     now: updatedAt?.getTime() ?? 0, // ใช้หาจุดแจกที่ใกล้ปิด
@@ -139,7 +142,7 @@ export function PlaceList({ type }) {
 
       {/* บนสุดของแผนที่: แถบข่าวสารจากศูนย์ แบบเดียวกับหน้าภาพรวม */}
       <div ref={topRef} className={cn('pointer-events-none absolute inset-x-0 top-0 z-[500] flex flex-col pt-3 md:items-end md:px-3', !collapsed && 'md:left-80 lg:left-[25.5rem]')}>
-        <NewsTicker items={announcements} updatedAt={updatedAt} loading={loading || other.loading} className="px-3 md:w-full md:max-w-lg md:px-0" />
+        <NewsTicker items={announcements} updatedAt={updatedAt} loading={loading || other.loading || authored.loading} className="px-3 md:w-full md:max-w-lg md:px-0" />
       </div>
 
       <MapSheet
@@ -216,15 +219,7 @@ export function PlaceList({ type }) {
               icon={<MagnifyingGlassIcon size={18} className="text-t3" aria-hidden />}
             />
 
-            {error && (
-              <p role="alert" className="flex items-start gap-2 text-md text-red-tx">
-                <WarningIcon size={18} weight="bold" className="mt-0.5 shrink-0" aria-hidden />
-                <span className="flex-1">{error.message}</span>
-                <button type="button" onClick={refresh} className="font-semibold text-acc underline">
-                  ลองใหม่
-                </button>
-              </p>
-            )}
+            <ErrorBanner error={error} onRetry={refresh} />
 
             {loading ? (
               <p role="status" className="flex items-center justify-center gap-2 py-6 text-t3">
@@ -232,7 +227,7 @@ export function PlaceList({ type }) {
                 กำลังโหลด…
               </p>
             ) : places.length === 0 ? (
-              <EmptyState>{query ? 'ไม่พบที่ตรงกับคำค้น' : 'ยังไม่มีข้อมูล'}</EmptyState>
+              !error && <EmptyState>{query ? 'ไม่พบที่ตรงกับคำค้น' : 'ยังไม่มีข้อมูล'}</EmptyState>
             ) : (
               <div className="border-y border-line">
                 {places.map((p) => (

@@ -2,13 +2,15 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import {
   ChartBarIcon,
+  CircleNotchIcon,
   HouseLineIcon,
   LifebuoyIcon,
   ListIcon,
   MapTrifoldIcon,
+  MegaphoneIcon,
   PackageIcon,
   PathIcon,
   SignOutIcon,
@@ -17,8 +19,10 @@ import {
   XIcon,
 } from './pk/icons';
 import { Spinner } from './pk/Spinner';
+import { ErrorBanner } from './pk/ErrorBanner';
+import { ToastProvider } from './pk/Toast';
 import { cn } from './pk/cn';
-import { ROLE_LABEL, useAuth, useRequireRole } from '@/lib/auth';
+import { ROLE_LABEL, useLogout, useRequireRole } from '@/lib/auth';
 
 const COMMAND_ITEMS = [
   { href: '/command', label: 'Dashboard ศูนย์บัญชาการ', icon: SquaresFourIcon },
@@ -30,6 +34,7 @@ const COMMAND_ITEMS = [
 const ADMIN_ITEMS = [
   { href: '/admin', label: 'ภาพรวมทั้งระบบ', icon: ChartBarIcon },
   { href: '/admin/users', label: 'จัดการบัญชีผู้ใช้', icon: UsersIcon },
+  { href: '/admin/announcements', label: 'จัดการประกาศ', icon: MegaphoneIcon },
 ];
 
 function NavList({ items, pathname, onNavigate }) {
@@ -69,9 +74,8 @@ function NavGroup({ title, children }) {
 
 export default function StaffShell({ roles, children }) {
   const { user, allowed } = useRequireRole(roles);
-  const { logout } = useAuth();
+  const { signOut, pending: loggingOut, error: logoutError } = useLogout();
   const pathname = usePathname();
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
   const menuButtonRef = useRef(null);
@@ -126,22 +130,23 @@ export default function StaffShell({ roles, children }) {
       <div className="rounded-lg bg-s2 p-3">
         <p className="truncate text-base font-semibold">{user.full_name}</p>
         <p className="truncate text-xs text-t3">{ROLE_LABEL[user.role]}</p>
+        {logoutError && <div className="mt-3"><ErrorBanner error={logoutError} /></div>}
         <button
           type="button"
-          onClick={() => {
-            logout();
-            router.replace('/login');
-          }}
-          className="mt-2 flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-lg px-2 text-base font-medium text-t2 hover:bg-white hover:text-ink"
+          onClick={signOut}
+          disabled={loggingOut}
+          aria-busy={loggingOut || undefined}
+          className="mt-2 flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-lg px-2 text-base font-medium text-t2 hover:bg-white hover:text-ink disabled:cursor-wait disabled:opacity-60"
         >
-          <SignOutIcon size={18} aria-hidden />
-          ออกจากระบบ
+          {loggingOut ? <CircleNotchIcon size={18} className="animate-spin" aria-hidden /> : <SignOutIcon size={18} aria-hidden />}
+          {loggingOut ? 'กำลังออกจากระบบ…' : 'ออกจากระบบ'}
         </button>
       </div>
     </div>
   );
 
   return (
+    <ToastProvider>
     <div className="min-h-dvh lg:pl-72">
       <aside className="fixed inset-y-0 left-0 z-[1100] hidden w-72 lg:block">{sidebar}</aside>
 
@@ -203,6 +208,7 @@ export default function StaffShell({ roles, children }) {
 
       <main className="mx-auto w-full max-w-[1400px] p-4 sm:p-6">{children}</main>
     </div>
+    </ToastProvider>
   );
 }
 

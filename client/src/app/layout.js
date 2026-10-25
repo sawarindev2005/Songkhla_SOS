@@ -3,6 +3,7 @@ import 'leaflet/dist/leaflet.css';
 import 'react-leaflet-cluster/dist/assets/MarkerCluster.css';
 import './globals.css';
 import { AuthProvider } from '@/lib/auth';
+import { FormViewport } from '@/components/pk/FormViewport';
 
 const plex = IBM_Plex_Sans_Thai({
   subsets: ['thai', 'latin'],
@@ -28,13 +29,14 @@ export const viewport = {
   initialScale: 1,
   themeColor: '#dc2626',
   viewportFit: 'cover',
+  interactiveWidget: 'resizes-visual',
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="th" className={`${plex.variable} ${plexLooped.variable}`}>
       <body className="min-h-dvh antialiased">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider><FormViewport />{children}</AuthProvider>
       </body>
     </html>
   );

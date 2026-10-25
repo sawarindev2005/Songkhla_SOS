@@ -96,6 +96,16 @@
   --animate-ticker-in: ticker-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
   --animate-ticker-from-right: ticker-from-right 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
   --animate-ticker-from-left: ticker-from-left 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-sos-shake: sos-shake 0.2s ease-out;
+
+  @keyframes sos-shake {
+    0%, 100% { transform: rotate(0deg); }
+    15% { transform: rotate(-12deg); }
+    30% { transform: rotate(10deg); }
+    45% { transform: rotate(-8deg); }
+    60% { transform: rotate(6deg); }
+    80% { transform: rotate(-3deg); }
+  }
 
   @keyframes ticker-from-right {
     from {
